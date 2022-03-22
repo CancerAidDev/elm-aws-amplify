@@ -226,7 +226,7 @@ getCredentials identityId =
 {-| -}
 updateEndpoint : Credentials.Credentials -> Model -> EndpointRequest -> Cmd Msg
 updateEndpoint credentials { clientInfo, applicationId, identityId, region } { endpointId, requestId } =
-    AWS.Http.send (CognitoIdentity.service region)
+    AWS.Http.send (Pinpoint.service region)
         credentials
         (Pinpoint.updateEndpoint
             { applicationId = applicationId
@@ -266,7 +266,7 @@ updateEndpoint credentials { clientInfo, applicationId, identityId, region } { e
 {-| -}
 record : String -> Credentials.Credentials -> Model -> Event -> Cmd Msg
 record identityId credentials { applicationId, sessionId, region } { eventId, eventType, timestamp, attributes } =
-    AWS.Http.send (CognitoIdentity.service region)
+    AWS.Http.send (Pinpoint.service region)
         credentials
         (Pinpoint.putEvents
             { applicationId = applicationId
