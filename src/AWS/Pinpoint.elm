@@ -60,6 +60,7 @@ service : AWS.Config.Region -> AWS.Service.Service
 service region =
     AWS.Config.defineRegional "pinpoint" "2016-12-01" AWS.Config.JSON AWS.Config.SignV4 region
         |> AWS.Config.withJsonVersion "1.1"
+        |> AWS.Config.withTargetPrefix "Pinpoint"
         |> AWS.Service.service
 
 

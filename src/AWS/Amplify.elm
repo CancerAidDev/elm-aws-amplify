@@ -34,6 +34,7 @@ module AWS.Amplify exposing
 
 import AWS.ClientInfo exposing (ClientInfo)
 import AWS.CognitoIdentity as CognitoIdentity
+import AWS.Config
 import AWS.Credentials as Credentials
 import AWS.Http
 import AWS.Pinpoint as Pinpoint
@@ -54,7 +55,7 @@ type alias Model =
     , applicationId : String
     , identityId : Maybe String
     , sessionId : String
-    , region : String
+    , region : AWS.Config.Region
     , currentSeed : Seed
     }
 
@@ -204,7 +205,7 @@ update msg model =
 
 
 {-| -}
-getId : String -> String -> Cmd Msg
+getId : String -> AWS.Config.Region -> Cmd Msg
 getId identityPoolId region =
     AWS.Http.sendUnsigned (CognitoIdentity.service region)
         (CognitoIdentity.getId
@@ -216,7 +217,7 @@ getId identityPoolId region =
         |> Task.attempt HandleGetId
 
 
-getCredentials : String -> String -> Cmd Msg
+getCredentials : String -> AWS.Config.Region -> Cmd Msg
 getCredentials identityId region =
     AWS.Http.sendUnsigned (CognitoIdentity.service region)
         (CognitoIdentity.getCredentialsForIdentity
