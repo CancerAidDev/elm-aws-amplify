@@ -52,7 +52,7 @@ type alias Model =
     { credentials : Maybe Credentials.Credentials
     , clientInfo : ClientInfo
     , applicationId : String
-    , userId : String
+    , userId : Maybe String
     , sessionId : String
     , region : String
     , currentSeed : Seed
@@ -70,19 +70,16 @@ init :
     -> ( Model, Cmd Msg )
 init { identityPoolId, clientInfo, applicationId, region, seed } =
     let
-        ( userId, seed1 ) =
+        ( sessionId, seed1 ) =
             step Uuid.generator seed
-
-        ( sessionId, seed2 ) =
-            step Uuid.generator seed1
     in
     ( { credentials = Nothing
       , clientInfo = clientInfo
       , applicationId = applicationId
-      , userId = Uuid.toString userId
+      , userId = Nothing
       , sessionId = Uuid.toString sessionId
       , region = region
-      , currentSeed = seed2
+      , currentSeed = seed1
       }
     , getId identityPoolId
     )
@@ -152,13 +149,11 @@ update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
         HandleGetId result ->
-            ( model
-            , result
+            result
                 |> Result.toMaybe
                 |> Maybe.andThen .identityId
-                |> Maybe.map getCredentials
-                |> Maybe.withDefault Cmd.none
-            )
+                |> Maybe.map (\identityId -> ( { model | userId = Just identityId }, getCredentials identityId ))
+                |> Maybe.withDefault ( model, Cmd.none )
 
         HandleGetCredentials result ->
             case result of
@@ -254,22 +249,14 @@ updateEndpoint credentials { clientInfo, applicationId, userId, region } { endpo
                         }
                 , effectiveDate = Nothing
                 , endpointStatus = Nothing
-                , location =
-                    Just
-                        { city = Nothing
-                        , country = Nothing
-                        , latitude = Nothing
-                        , longitude = Nothing
-                        , postalCode = Nothing
-                        , region = Nothing
-                        }
+                , location = Nothing
                 , metrics = Just Dict.empty
                 , optOut = Nothing
                 , requestId = Just requestId
                 , user =
                     Just
                         { userAttributes = Just Dict.empty
-                        , userId = Just userId
+                        , userId = userId
                         }
                 }
             }

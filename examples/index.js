@@ -1,3 +1,4 @@
+import { clientInfo } from "./browser";
 import { Elm } from "./Main.elm";
 
 const crypto = window.crypto || window.msCrypto;
@@ -14,14 +15,6 @@ const flags = {
   appId: process.env.APP_ID,
   identityPoolId: process.env.IDENTITY_POOL_ID,
   region: process.env.AWS_REGION,
-  clientInfo: {
-    platform: "platform",
-    make: "make",
-    model: "model",
-    version: "version",
-    appVersion: "appVersion",
-    language: "language",
-    timezone: "timezone",
-  },
+  clientInfo: clientInfo(),
 };
 Elm.Main.init({ node: document.querySelector("main"), flags: flags });

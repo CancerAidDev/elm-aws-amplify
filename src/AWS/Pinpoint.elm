@@ -406,8 +406,8 @@ type alias EndpointUser =
 endpointUserCodec : Codec EndpointUser
 endpointUserCodec =
     Codec.object EndpointUser
-        |> Codec.optionalField "userAttributes" .userAttributes attributesCodec
-        |> Codec.optionalField "userId" .userId Codec.string
+        |> Codec.optionalField "UserAttributes" .userAttributes attributesCodec
+        |> Codec.optionalField "UserId" .userId Codec.string
         |> Codec.buildObject
 
 
