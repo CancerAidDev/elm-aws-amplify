@@ -81,7 +81,7 @@ init { identityPoolId, clientInfo, applicationId, region, seed } =
       , region = region
       , currentSeed = seed1
       }
-    , getId identityPoolId
+    , getId identityPoolId region
     )
 
 
@@ -151,7 +151,12 @@ update msg model =
             result
                 |> Result.toMaybe
                 |> Maybe.andThen .identityId
-                |> Maybe.map (\identityId -> ( { model | identityId = Just identityId }, getCredentials identityId ))
+                |> Maybe.map
+                    (\identityId ->
+                        ( { model | identityId = Just identityId }
+                        , getCredentials identityId model.region
+                        )
+                    )
                 |> Maybe.withDefault ( model, Cmd.none )
 
         HandleGetCredentials result ->
@@ -199,9 +204,9 @@ update msg model =
 
 
 {-| -}
-getId : String -> Cmd Msg
-getId identityPoolId =
-    AWS.Http.sendUnsigned (CognitoIdentity.service "ap-southeast-2")
+getId : String -> String -> Cmd Msg
+getId identityPoolId region =
+    AWS.Http.sendUnsigned (CognitoIdentity.service region)
         (CognitoIdentity.getId
             { accountId = Nothing
             , identityPoolId = identityPoolId
@@ -211,9 +216,9 @@ getId identityPoolId =
         |> Task.attempt HandleGetId
 
 
-getCredentials : String -> Cmd Msg
-getCredentials identityId =
-    AWS.Http.sendUnsigned (CognitoIdentity.service "ap-southeast-2")
+getCredentials : String -> String -> Cmd Msg
+getCredentials identityId region =
+    AWS.Http.sendUnsigned (CognitoIdentity.service region)
         (CognitoIdentity.getCredentialsForIdentity
             { customRoleArn = Nothing
             , identityId = identityId
