@@ -32,13 +32,14 @@ module AWS.Amplify exposing
 
 -}
 
+import AWS.ClientInfo exposing (ClientInfo)
 import AWS.CognitoIdentity as CognitoIdentity
 import AWS.Credentials as Credentials
 import AWS.Http
 import AWS.Pinpoint as Pinpoint
 import Dict exposing (Dict)
-import Json.Decode as Decode
-import Json.Decode.Pipeline as DecodePipeline
+import Prng.Uuid as Uuid
+import Random.Pcg.Extended exposing (Seed, step)
 import Task
 
 
@@ -51,10 +52,10 @@ type alias Model =
     { credentials : Maybe Credentials.Credentials
     , clientInfo : ClientInfo
     , applicationId : String
-    , endpointId : String
     , userId : String
     , sessionId : String
     , region : String
+    , currentSeed : Seed
     }
 
 
@@ -63,20 +64,25 @@ init :
     { identityPoolId : String
     , clientInfo : ClientInfo
     , applicationId : String
-    , endpointId : String
-    , userId : String
-    , sessionId : String
     , region : String
+    , seed : Seed
     }
     -> ( Model, Cmd Msg )
-init { identityPoolId, clientInfo, applicationId, endpointId, userId, sessionId, region } =
+init { identityPoolId, clientInfo, applicationId, region, seed } =
+    let
+        ( userId, seed1 ) =
+            step Uuid.generator seed
+
+        ( sessionId, seed2 ) =
+            step Uuid.generator seed1
+    in
     ( { credentials = Nothing
       , clientInfo = clientInfo
       , applicationId = applicationId
-      , endpointId = endpointId
-      , userId = userId
-      , sessionId = sessionId
+      , userId = Uuid.toString userId
+      , sessionId = Uuid.toString sessionId
       , region = region
+      , currentSeed = seed2
       }
     , getId identityPoolId
     )
@@ -110,19 +116,9 @@ type alias PutEventsResult =
         Pinpoint.PutEventsResponse
 
 
-type alias ClientInfo =
-    { platform : String
-    , make : String
-    , model : String
-    , version : String
-    , appVersion : String
-    , language : String
-    , timezone : String
-    }
-
-
 type alias Event =
-    { eventId : String
+    { eventBatchId : String
+    , eventId : String
     , eventType : String
     , timestamp : String
     , attributes : Dict String String
@@ -130,19 +126,9 @@ type alias Event =
 
 
 type alias EndpointRequest =
-    { requestId : String }
-
-
-decoder : Decode.Decoder ClientInfo
-decoder =
-    Decode.succeed ClientInfo
-        |> DecodePipeline.required "platform" Decode.string
-        |> DecodePipeline.required "make" Decode.string
-        |> DecodePipeline.required "model" Decode.string
-        |> DecodePipeline.required "version" Decode.string
-        |> DecodePipeline.required "appVersion" Decode.string
-        |> DecodePipeline.required "language" Decode.string
-        |> DecodePipeline.required "timezone" Decode.string
+    { endpointId : String
+    , requestId : String
+    }
 
 
 
@@ -175,31 +161,44 @@ update msg model =
             )
 
         HandleGetCredentials result ->
-            ( result
-                |> Result.toMaybe
-                |> Maybe.andThen
-                    (\{ credentials } ->
-                        Maybe.andThen
+            case result of
+                Ok { credentials } ->
+                    credentials
+                        |> Maybe.andThen
                             (\{ accessKeyId, secretKey, sessionToken } ->
                                 Maybe.map2
                                     (\accessKeyId_ secretAccessKey_ ->
-                                        { model
-                                            | credentials =
-                                                Just
-                                                    { accessKeyId = accessKeyId_
-                                                    , secretAccessKey = secretAccessKey_
-                                                    , sessionToken = sessionToken
-                                                    }
-                                        }
+                                        let
+                                            ( requestId, seed1 ) =
+                                                step Uuid.generator model.currentSeed
+
+                                            ( endpointId, seed2 ) =
+                                                step Uuid.generator seed1
+
+                                            credentials_ =
+                                                { accessKeyId = accessKeyId_
+                                                , secretAccessKey = secretAccessKey_
+                                                , sessionToken = sessionToken
+                                                }
+
+                                            updatedModel =
+                                                { model | credentials = Just credentials_, currentSeed = seed2 }
+                                        in
+                                        ( updatedModel
+                                        , updateEndpoint credentials_
+                                            updatedModel
+                                            { requestId = Uuid.toString requestId
+                                            , endpointId = Uuid.toString endpointId
+                                            }
+                                        )
                                     )
                                     accessKeyId
                                     secretKey
                             )
-                            credentials
-                    )
-                |> Maybe.withDefault model
-            , Cmd.none
-            )
+                        |> Maybe.withDefault ( model, Cmd.none )
+
+                Err _ ->
+                    ( model, Cmd.none )
 
         _ ->
             ( model, Cmd.none )
@@ -231,114 +230,106 @@ getCredentials identityId =
 
 
 {-| -}
-updateEndpoint : Model -> EndpointRequest -> Maybe (Cmd Msg)
-updateEndpoint { credentials, clientInfo, applicationId, endpointId, userId, region } { requestId } =
-    credentials
-        |> Maybe.map
-            (\creds ->
-                AWS.Http.send (CognitoIdentity.service region)
-                    creds
-                    (Pinpoint.updateEndpoint
-                        { applicationId = applicationId
-                        , endpointId = endpointId
-                        , endpointRequest =
-                            { address = Nothing
-                            , attributes = Just Dict.empty
-                            , channelType = Nothing
-                            , demographic =
-                                Just
-                                    { appVersion = Just clientInfo.appVersion
-                                    , locale = Nothing
-                                    , make = Just clientInfo.make
-                                    , model = Just clientInfo.model
-                                    , modelVersion = Just clientInfo.version
-                                    , platform = Just clientInfo.platform
-                                    , platformVersion = Nothing
-                                    , timezone = Nothing
-                                    }
-                            , effectiveDate = Nothing
-                            , endpointStatus = Nothing
-                            , location =
-                                Just
-                                    { city = Nothing
-                                    , country = Nothing
-                                    , latitude = Nothing
-                                    , longitude = Nothing
-                                    , postalCode = Nothing
-                                    , region = Nothing
-                                    }
-                            , metrics = Just Dict.empty
-                            , optOut = Nothing
-                            , requestId = Just requestId
-                            , user =
-                                Just
-                                    { userAttributes = Just Dict.empty
-                                    , userId = Just userId
-                                    }
-                            }
+updateEndpoint : Credentials.Credentials -> Model -> EndpointRequest -> Cmd Msg
+updateEndpoint credentials { clientInfo, applicationId, userId, region } { endpointId, requestId } =
+    AWS.Http.send (CognitoIdentity.service region)
+        credentials
+        (Pinpoint.updateEndpoint
+            { applicationId = applicationId
+            , endpointId = endpointId
+            , endpointRequest =
+                { address = Nothing
+                , attributes = Just Dict.empty
+                , channelType = Nothing
+                , demographic =
+                    Just
+                        { appVersion = Just clientInfo.appVersion
+                        , locale = Nothing
+                        , make = Just clientInfo.make
+                        , model = Just clientInfo.model
+                        , modelVersion = Just clientInfo.version
+                        , platform = Just clientInfo.platform
+                        , platformVersion = Nothing
+                        , timezone = Nothing
                         }
-                    )
-                    |> Task.attempt HandleUpdateEvent
-            )
+                , effectiveDate = Nothing
+                , endpointStatus = Nothing
+                , location =
+                    Just
+                        { city = Nothing
+                        , country = Nothing
+                        , latitude = Nothing
+                        , longitude = Nothing
+                        , postalCode = Nothing
+                        , region = Nothing
+                        }
+                , metrics = Just Dict.empty
+                , optOut = Nothing
+                , requestId = Just requestId
+                , user =
+                    Just
+                        { userAttributes = Just Dict.empty
+                        , userId = Just userId
+                        }
+                }
+            }
+        )
+        |> Task.attempt HandleUpdateEvent
 
 
 {-| -}
-record : Model -> Event -> Maybe (Cmd Msg)
-record { credentials, applicationId, endpointId, sessionId, region } { eventId, eventType, timestamp, attributes } =
-    credentials
-        |> Maybe.map
-            (\creds ->
-                AWS.Http.send (CognitoIdentity.service region)
-                    creds
-                    (Pinpoint.putEvents
-                        { applicationId = applicationId
-                        , eventsRequest =
-                            { batchItem =
-                                Just <|
-                                    Dict.fromList
-                                        [ ( endpointId
-                                          , { endpoint =
-                                                Just
-                                                    { address = Nothing
-                                                    , attributes = Nothing
-                                                    , channelType = Nothing
-                                                    , demographic = Nothing
-                                                    , effectiveDate = Nothing
-                                                    , endpointStatus = Nothing
-                                                    , location = Nothing
-                                                    , metrics = Nothing
-                                                    , optOut = Nothing
-                                                    , requestId = Nothing
-                                                    , user = Nothing
-                                                    }
-                                            , events =
-                                                Just <|
-                                                    Dict.fromList
-                                                        [ ( eventId
-                                                          , { appPackageName = Nothing
-                                                            , appTitle = Nothing
-                                                            , appVersionCode = Nothing
-                                                            , attributes = Just attributes
-                                                            , clientSdkVersion = Nothing
-                                                            , eventType = Just eventType
-                                                            , metrics = Nothing
-                                                            , sdkName = Nothing
-                                                            , session =
-                                                                Just
-                                                                    { duration = Nothing
-                                                                    , id = Just sessionId
-                                                                    , startTimestamp = Just timestamp
-                                                                    , stopTimestamp = Nothing
-                                                                    }
-                                                            , timestamp = Just timestamp
-                                                            }
-                                                          )
-                                                        ]
-                                            }
-                                          )
-                                        ]
-                            }
-                        }
-                    )
-                    |> Task.attempt HandlePutEvents
-            )
+record : Credentials.Credentials -> Model -> Event -> Cmd Msg
+record credentials { applicationId, sessionId, region } { eventBatchId, eventId, eventType, timestamp, attributes } =
+    AWS.Http.send (CognitoIdentity.service region)
+        credentials
+        (Pinpoint.putEvents
+            { applicationId = applicationId
+            , eventsRequest =
+                { batchItem =
+                    Just <|
+                        Dict.fromList
+                            [ ( eventBatchId
+                              , { endpoint =
+                                    Just
+                                        { address = Nothing
+                                        , attributes = Nothing
+                                        , channelType = Nothing
+                                        , demographic = Nothing
+                                        , effectiveDate = Nothing
+                                        , endpointStatus = Nothing
+                                        , location = Nothing
+                                        , metrics = Nothing
+                                        , optOut = Nothing
+                                        , requestId = Nothing
+                                        , user = Nothing
+                                        }
+                                , events =
+                                    Just <|
+                                        Dict.fromList
+                                            [ ( eventId
+                                              , { appPackageName = Nothing
+                                                , appTitle = Nothing
+                                                , appVersionCode = Nothing
+                                                , attributes = Just attributes
+                                                , clientSdkVersion = Nothing
+                                                , eventType = Just eventType
+                                                , metrics = Nothing
+                                                , sdkName = Nothing
+                                                , session =
+                                                    Just
+                                                        { duration = Nothing
+                                                        , id = Just sessionId
+                                                        , startTimestamp = Just timestamp
+                                                        , stopTimestamp = Nothing
+                                                        }
+                                                , timestamp = Just timestamp
+                                                }
+                                              )
+                                            ]
+                                }
+                              )
+                            ]
+                }
+            }
+        )
+        |> Task.attempt HandlePutEvents
