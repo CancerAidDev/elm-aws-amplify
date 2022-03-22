@@ -1,6 +1,7 @@
 module Main exposing (main)
 
 import AWS.Amplify as Amplify
+import AWS.ClientInfo exposing (ClientInfo)
 import Browser
 import Html exposing (Html)
 import Random.Pcg.Extended exposing (initialSeed)
@@ -14,15 +15,7 @@ type alias Flags =
     { seed : ( Int, List Int )
     , appId : String
     , identityPoolId : String
-    , clientInfo :
-        { platform : String
-        , make : String
-        , model : String
-        , version : String
-        , appVersion : String
-        , language : String
-        , timezone : String
-        }
+    , clientInfo : ClientInfo
     , region : String
     }
 

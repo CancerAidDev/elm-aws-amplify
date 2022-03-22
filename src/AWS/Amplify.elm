@@ -52,7 +52,7 @@ type alias Model =
     { credentials : Maybe Credentials.Credentials
     , clientInfo : ClientInfo
     , applicationId : String
-    , userId : Maybe String
+    , identityId : Maybe String
     , sessionId : String
     , region : String
     , currentSeed : Seed
@@ -76,7 +76,7 @@ init { identityPoolId, clientInfo, applicationId, region, seed } =
     ( { credentials = Nothing
       , clientInfo = clientInfo
       , applicationId = applicationId
-      , userId = Nothing
+      , identityId = Nothing
       , sessionId = Uuid.toString sessionId
       , region = region
       , currentSeed = seed1
@@ -114,8 +114,7 @@ type alias PutEventsResult =
 
 
 type alias Event =
-    { eventBatchId : String
-    , eventId : String
+    { eventId : String
     , eventType : String
     , timestamp : String
     , attributes : Dict String String
@@ -152,7 +151,7 @@ update msg model =
             result
                 |> Result.toMaybe
                 |> Maybe.andThen .identityId
-                |> Maybe.map (\identityId -> ( { model | userId = Just identityId }, getCredentials identityId ))
+                |> Maybe.map (\identityId -> ( { model | identityId = Just identityId }, getCredentials identityId ))
                 |> Maybe.withDefault ( model, Cmd.none )
 
         HandleGetCredentials result ->
@@ -226,7 +225,7 @@ getCredentials identityId =
 
 {-| -}
 updateEndpoint : Credentials.Credentials -> Model -> EndpointRequest -> Cmd Msg
-updateEndpoint credentials { clientInfo, applicationId, userId, region } { endpointId, requestId } =
+updateEndpoint credentials { clientInfo, applicationId, identityId, region } { endpointId, requestId } =
     AWS.Http.send (CognitoIdentity.service region)
         credentials
         (Pinpoint.updateEndpoint
@@ -256,7 +255,7 @@ updateEndpoint credentials { clientInfo, applicationId, userId, region } { endpo
                 , user =
                     Just
                         { userAttributes = Just Dict.empty
-                        , userId = userId
+                        , userId = identityId
                         }
                 }
             }
@@ -265,8 +264,8 @@ updateEndpoint credentials { clientInfo, applicationId, userId, region } { endpo
 
 
 {-| -}
-record : Credentials.Credentials -> Model -> Event -> Cmd Msg
-record credentials { applicationId, sessionId, region } { eventBatchId, eventId, eventType, timestamp, attributes } =
+record : String -> Credentials.Credentials -> Model -> Event -> Cmd Msg
+record identityId credentials { applicationId, sessionId, region } { eventId, eventType, timestamp, attributes } =
     AWS.Http.send (CognitoIdentity.service region)
         credentials
         (Pinpoint.putEvents
@@ -275,7 +274,7 @@ record credentials { applicationId, sessionId, region } { eventBatchId, eventId,
                 { batchItem =
                     Just <|
                         Dict.fromList
-                            [ ( eventBatchId
+                            [ ( identityId
                               , { endpoint =
                                     Just
                                         { address = Nothing

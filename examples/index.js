@@ -17,4 +17,5 @@ const flags = {
   region: process.env.AWS_REGION,
   clientInfo: clientInfo(),
 };
+
 Elm.Main.init({ node: document.querySelector("main"), flags: flags });
