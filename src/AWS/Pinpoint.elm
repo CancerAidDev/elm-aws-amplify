@@ -72,7 +72,7 @@ updateEndpoint req =
             req.endpointRequest |> Codec.encoder endpointRequestCodec |> AWS.Http.jsonBody
 
         url =
-            "v1/app/" ++ req.applicationId ++ "/endpoints/" ++ req.endpointId
+            "/v1/app/" ++ req.applicationId ++ "/endpoints/" ++ req.endpointId
 
         decoder =
             Json.Decode.succeed UpdateEndpointResponse
@@ -91,7 +91,7 @@ putEvents req =
             req.eventsRequest |> Codec.encoder eventsRequestCodec |> AWS.Http.jsonBody
 
         url =
-            "v1/app/" ++ req.applicationId ++ "/events"
+            "/v1/app/" ++ req.applicationId ++ "/events"
 
         decoder =
             Json.Decode.succeed PutEventsResponse

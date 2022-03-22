@@ -1,0 +1,11 @@
+{
+  "name": "examples",
+  "version": "1.0.0",
+  "main": "index.js",
+  "license": "MIT",
+  "devDependencies": {
+    "@parcel/transformer-elm": "2.3.2",
+    "elm": "^0.19.1-5",
+    "parcel": "^2.3.2"
+  }
+}

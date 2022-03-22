@@ -29,3 +29,7 @@ Temporary Items
 elm-stuff
 # elm-repl generated files
 repl-temp-*
+
+.parcel-cache
+dist
+node_Modules
