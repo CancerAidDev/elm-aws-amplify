@@ -43,14 +43,10 @@ update msg model =
 
 
 view : Model -> Html Msg
-view model =
+view _ =
     Html.text ""
 
 
-{-| 3.: To get enough bytes of randomness (128 bit), we have to pass at least 4 32-bit ints from JavaScript
-via flags. Here we pass 5, since having a seedExtension of a size that is a power of 2 results
-in slightly faster performance.
--}
 init : Flags -> ( Model, Cmd Msg )
 init { seed, identityPoolId, clientInfo, appId, region } =
     let
