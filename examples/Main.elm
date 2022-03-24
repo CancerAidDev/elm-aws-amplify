@@ -9,6 +9,8 @@ import Html exposing (Html, button, div, h1, h2, input, label, text)
 import Html.Attributes exposing (value)
 import Html.Events exposing (onClick, onInput)
 import Random.Pcg.Extended exposing (initialSeed)
+import Task
+import Time
 
 
 type alias Model =
@@ -30,21 +32,32 @@ type alias Flags =
 
 type Msg
     = Record String Credentials
+    | RecordWithTime String Credentials Time.Posix
     | AmplifyMsg Amplify.Msg
     | UpdateName String
     | UpdateKey String
     | UpdateValue String
+    | NoOp
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
         Record identityId credentials ->
+            ( model
+            , Time.now
+                |> Task.attempt
+                    (Result.map (RecordWithTime identityId credentials)
+                        >> Result.withDefault NoOp
+                    )
+            )
+
+        RecordWithTime identityId credentials time ->
             Amplify.record identityId
                 credentials
                 model.amplify
                 { name = model.name
-                , timestamp = "-"
+                , timestamp = time
                 , attributes = Dict.fromList [ ( model.key, model.value ) ]
                 }
                 |> Tuple.mapBoth (\updated -> { model | amplify = updated }) (Cmd.map AmplifyMsg)
@@ -61,6 +74,9 @@ update msg model =
 
         UpdateValue val ->
             ( { model | value = val }, Cmd.none )
+
+        NoOp ->
+            ( model, Cmd.none )
 
 
 view : Model -> Html Msg

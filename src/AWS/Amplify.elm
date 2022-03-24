@@ -39,9 +39,11 @@ import AWS.Credentials as Credentials
 import AWS.Http
 import AWS.Pinpoint as Pinpoint
 import Dict exposing (Dict)
+import Iso8601
 import Prng.Uuid as Uuid
 import Random.Pcg.Extended exposing (Seed, step)
 import Task
+import Time
 
 
 
@@ -116,7 +118,7 @@ type alias PutEventsResult =
 
 type alias Event =
     { name : String
-    , timestamp : String
+    , timestamp : Time.Posix
     , attributes : Dict String String
     }
 
@@ -310,10 +312,10 @@ record identityId credentials ({ applicationId, sessionId, region } as model) { 
                                                     Just
                                                         { duration = Nothing
                                                         , id = Just sessionId
-                                                        , startTimestamp = Just timestamp
+                                                        , startTimestamp = Just <| Iso8601.fromTime timestamp
                                                         , stopTimestamp = Nothing
                                                         }
-                                                , timestamp = Just timestamp
+                                                , timestamp = Just <| Iso8601.fromTime timestamp
                                                 }
                                               )
                                             ]
