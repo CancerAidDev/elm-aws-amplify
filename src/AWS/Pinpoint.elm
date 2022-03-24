@@ -100,7 +100,7 @@ putEvents req =
                 |> Pipeline.optional "EventsResponse" (Json.Decode.maybe (Codec.decoder eventsResponseCodec)) Nothing
                 |> AWS.Http.jsonBodyDecoder
     in
-    AWS.Http.request "PutEvents" AWS.Http.PUT url jsonBody decoder AWS.Http.awsAppErrDecoder
+    AWS.Http.request "PutEvents" AWS.Http.POST url jsonBody decoder AWS.Http.awsAppErrDecoder
 
 
 {-| The UpdateEndpointRequest data model.
