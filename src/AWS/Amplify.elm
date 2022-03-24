@@ -115,8 +115,7 @@ type alias PutEventsResult =
 
 
 type alias Event =
-    { eventId : String
-    , eventType : String
+    { name : String
     , timestamp : String
     , attributes : Dict String String
     }
@@ -169,28 +168,14 @@ update msg model =
                                 Maybe.map2
                                     (\accessKeyId_ secretAccessKey_ ->
                                         let
-                                            ( requestId, seed1 ) =
-                                                step Uuid.generator model.currentSeed
-
-                                            ( endpointId, seed2 ) =
-                                                step Uuid.generator seed1
-
                                             credentials_ =
                                                 { accessKeyId = accessKeyId_
                                                 , secretAccessKey = secretAccessKey_
                                                 , sessionToken = sessionToken
                                                 }
-
-                                            updatedModel =
-                                                { model | credentials = Just credentials_, currentSeed = seed2 }
                                         in
-                                        ( updatedModel
-                                        , updateEndpoint credentials_
-                                            updatedModel
-                                            { requestId = Uuid.toString requestId
-                                            , endpointId = Uuid.toString endpointId
-                                            }
-                                        )
+                                        updateEndpoint credentials_
+                                            { model | credentials = Just credentials_ }
                                     )
                                     accessKeyId
                                     secretKey
@@ -230,13 +215,21 @@ getCredentials identityId region =
 
 
 {-| -}
-updateEndpoint : Credentials.Credentials -> Model -> EndpointRequest -> Cmd Msg
-updateEndpoint credentials { clientInfo, applicationId, identityId, region } { endpointId, requestId } =
-    AWS.Http.send (Pinpoint.service region)
+updateEndpoint : Credentials.Credentials -> Model -> ( Model, Cmd Msg )
+updateEndpoint credentials ({ clientInfo, applicationId, identityId, region } as model) =
+    let
+        ( requestId, seed1 ) =
+            step Uuid.generator model.currentSeed
+
+        ( endpointId, seed2 ) =
+            step Uuid.generator seed1
+    in
+    ( { model | currentSeed = seed2 }
+    , AWS.Http.send (Pinpoint.service region)
         credentials
         (Pinpoint.updateEndpoint
             { applicationId = applicationId
-            , endpointId = endpointId
+            , endpointId = Uuid.toString endpointId
             , endpointRequest =
                 { address = Nothing
                 , attributes = Just Dict.empty
@@ -257,7 +250,7 @@ updateEndpoint credentials { clientInfo, applicationId, identityId, region } { e
                 , location = Nothing
                 , metrics = Just Dict.empty
                 , optOut = Nothing
-                , requestId = Just requestId
+                , requestId = Just <| Uuid.toString requestId
                 , user =
                     Just
                         { userAttributes = Just Dict.empty
@@ -267,12 +260,18 @@ updateEndpoint credentials { clientInfo, applicationId, identityId, region } { e
             }
         )
         |> Task.attempt HandleUpdateEvent
+    )
 
 
 {-| -}
-record : String -> Credentials.Credentials -> Model -> Event -> Cmd Msg
-record identityId credentials { applicationId, sessionId, region } { eventId, eventType, timestamp, attributes } =
-    AWS.Http.send (Pinpoint.service region)
+record : String -> Credentials.Credentials -> Model -> Event -> ( Model, Cmd Msg )
+record identityId credentials ({ applicationId, sessionId, region } as model) { name, timestamp, attributes } =
+    let
+        ( eventId, seed1 ) =
+            step Uuid.generator model.currentSeed
+    in
+    ( { model | currentSeed = seed1 }
+    , AWS.Http.send (Pinpoint.service region)
         credentials
         (Pinpoint.putEvents
             { applicationId = applicationId
@@ -298,13 +297,13 @@ record identityId credentials { applicationId, sessionId, region } { eventId, ev
                                 , events =
                                     Just <|
                                         Dict.fromList
-                                            [ ( eventId
+                                            [ ( Uuid.toString eventId
                                               , { appPackageName = Nothing
                                                 , appTitle = Nothing
                                                 , appVersionCode = Nothing
                                                 , attributes = Just attributes
                                                 , clientSdkVersion = Nothing
-                                                , eventType = Just eventType
+                                                , eventType = Just name
                                                 , metrics = Nothing
                                                 , sdkName = Nothing
                                                 , session =
@@ -325,3 +324,4 @@ record identityId credentials { applicationId, sessionId, region } { eventId, ev
             }
         )
         |> Task.attempt HandlePutEvents
+    )
