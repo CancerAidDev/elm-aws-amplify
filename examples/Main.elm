@@ -5,7 +5,7 @@ import AWS.ClientInfo exposing (ClientInfo)
 import AWS.Credentials exposing (Credentials)
 import Browser
 import Dict
-import Html exposing (Html, button, div, h1, h2, input, label, text)
+import Html exposing (Html, button, div, form, h1, h2, input, label, text)
 import Html.Attributes exposing (value)
 import Html.Events exposing (onClick, onInput)
 import Random.Pcg.Extended exposing (initialSeed)
@@ -86,21 +86,23 @@ view model =
             div []
                 [ h2 [] [ text "IdentityId" ]
                 , div [] [ text identityId ]
-                , h1 [] [ text "Record" ]
-                , h2 [] [ text "Name" ]
-                , input [ value model.name, onInput UpdateName ] []
-                , h2 [] [ text "Attributes" ]
-                , div []
-                    [ div []
-                        [ label [] [ text "Key: " ]
-                        , input [ value model.key, onInput UpdateKey ] []
-                        ]
+                , form []
+                    [ h1 [] [ text "Record" ]
+                    , h2 [] [ text "Name" ]
+                    , input [ value model.name, onInput UpdateName ] []
+                    , h2 [] [ text "Attributes" ]
                     , div []
-                        [ label [] [ text "Value: " ]
-                        , input [ value model.value, onInput UpdateValue ] []
+                        [ div []
+                            [ label [] [ text "Key: " ]
+                            , input [ value model.key, onInput UpdateKey ] []
+                            ]
+                        , div []
+                            [ label [] [ text "Value: " ]
+                            , input [ value model.value, onInput UpdateValue ] []
+                            ]
                         ]
+                    , div [] [ button [ onClick <| Record identityId credentials ] [ text "Submit" ] ]
                     ]
-                , div [] [ button [ onClick <| Record identityId credentials ] [ text "Submit" ] ]
                 ]
 
         _ ->
