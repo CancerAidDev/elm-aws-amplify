@@ -123,12 +123,6 @@ type alias Event =
     }
 
 
-type alias EndpointRequest =
-    { endpointId : String
-    , requestId : String
-    }
-
-
 
 -- MSG
 
