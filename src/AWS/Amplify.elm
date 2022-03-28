@@ -279,49 +279,46 @@ record identityId credentials ({ applicationId, sessionId, region } as model) { 
             { applicationId = applicationId
             , eventsRequest =
                 { batchItem =
-                    Just <|
-                        Dict.fromList
-                            [ ( identityId
-                              , { endpoint =
-                                    Just
-                                        { address = Nothing
-                                        , attributes = Nothing
-                                        , channelType = Nothing
-                                        , demographic = Nothing
-                                        , effectiveDate = Nothing
-                                        , endpointStatus = Nothing
-                                        , location = Nothing
-                                        , metrics = Nothing
-                                        , optOut = Nothing
-                                        , requestId = Nothing
-                                        , user = Nothing
-                                        }
-                                , events =
-                                    Just <|
-                                        Dict.fromList
-                                            [ ( Uuid.toString eventId
-                                              , { appPackageName = Nothing
-                                                , appTitle = Nothing
-                                                , appVersionCode = Nothing
-                                                , attributes = Just attributes
-                                                , clientSdkVersion = Nothing
-                                                , eventType = Just name
-                                                , metrics = Nothing
-                                                , sdkName = Nothing
-                                                , session =
-                                                    Just
-                                                        { duration = Nothing
-                                                        , id = Just sessionId
-                                                        , startTimestamp = Just <| Iso8601.fromTime timestamp
-                                                        , stopTimestamp = Nothing
-                                                        }
-                                                , timestamp = Just <| Iso8601.fromTime timestamp
-                                                }
-                                              )
-                                            ]
+                    Dict.fromList
+                        [ ( identityId
+                          , { endpoint =
+                                { address = Nothing
+                                , attributes = Nothing
+                                , channelType = Nothing
+                                , demographic = Nothing
+                                , effectiveDate = Nothing
+                                , endpointStatus = Nothing
+                                , location = Nothing
+                                , metrics = Nothing
+                                , optOut = Nothing
+                                , requestId = Nothing
+                                , user = Nothing
                                 }
-                              )
-                            ]
+                            , events =
+                                Dict.fromList
+                                    [ ( Uuid.toString eventId
+                                      , { appPackageName = Nothing
+                                        , appTitle = Nothing
+                                        , appVersionCode = Nothing
+                                        , attributes = Just attributes
+                                        , clientSdkVersion = Nothing
+                                        , eventType = name
+                                        , metrics = Nothing
+                                        , sdkName = Nothing
+                                        , session =
+                                            Just
+                                                { duration = Nothing
+                                                , id = sessionId
+                                                , startTimestamp = Iso8601.fromTime timestamp
+                                                , stopTimestamp = Nothing
+                                                }
+                                        , timestamp = Iso8601.fromTime timestamp
+                                        }
+                                      )
+                                    ]
+                            }
+                          )
+                        ]
                 }
             }
         )
