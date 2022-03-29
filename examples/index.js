@@ -12,7 +12,7 @@ const getRandomInts = (n) => {
 const randInts = getRandomInts(5);
 const flags = {
   seed: [randInts[0], randInts.slice(1)],
-  appId: process.env.APP_ID,
+  pinpointProjectId: process.env.PINPOINT_PROJECT_ID,
   identityPoolId: process.env.IDENTITY_POOL_ID,
   region: process.env.AWS_REGION,
   clientInfo: clientInfo(),

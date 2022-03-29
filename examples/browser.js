@@ -1,4 +1,6 @@
 /*
+ * Adapted from https://github.com/aws-amplify/amplify-js/blob/5b4641b8568e3106db81958f1cb2ce0b6d684ab6/packages/core/src/ClientDevice/browser.ts
+ *
  * Copyright 2017-2017 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License"). You may not use this file except in compliance with

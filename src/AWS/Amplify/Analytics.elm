@@ -1,10 +1,21 @@
 module AWS.Amplify.Analytics exposing
-    ( Config
-    , Endpoint
-    , Event
-    , configure
-    , record
+    ( Config, Endpoint, configure
+    , Event, record
     )
+
+{-| Collect Analytics data for your application using Amazon Pinpoint.
+
+
+# Configure
+
+@docs Config, Endpoint, configure
+
+
+# Record
+
+@docs Event, record
+
+-}
 
 import AWS.Amplify.ClientInfo exposing (ClientInfo)
 import AWS.Config
@@ -17,6 +28,12 @@ import Task exposing (Task)
 import Time
 
 
+
+-- CONFIGURE
+
+
+{-| Analytics config
+-}
 type alias Config =
     { credentials : Credentials
     , clientInfo : ClientInfo
@@ -27,21 +44,16 @@ type alias Config =
     }
 
 
+{-| Endpoint request
+-}
 type alias Endpoint =
     { endpointId : String
     , requestId : String
     }
 
 
-type alias Event =
-    { eventId : String
-    , name : String
-    , timestamp : Time.Posix
-    , attributes : Dict String String
-    }
-
-
-{-| -}
+{-| Configre analytics
+-}
 configure : Config -> Endpoint -> Task (AWS.Http.Error AWS.Http.AWSAppError) Pinpoint.UpdateEndpointResponse
 configure { credentials, clientInfo, applicationId, identityId, region } { endpointId, requestId } =
     AWS.Http.send (Pinpoint.service region)
@@ -80,7 +92,22 @@ configure { credentials, clientInfo, applicationId, identityId, region } { endpo
         )
 
 
-{-| -}
+
+-- RECORD
+
+
+{-| Event record
+-}
+type alias Event =
+    { eventId : String
+    , name : String
+    , timestamp : Time.Posix
+    , attributes : Dict String String
+    }
+
+
+{-| Record an event
+-}
 record : Config -> Event -> Task (AWS.Http.Error AWS.Http.AWSAppError) Pinpoint.PutEventsResponse
 record { credentials, applicationId, identityId, sessionId, region } { eventId, name, timestamp, attributes } =
     AWS.Http.send (Pinpoint.service region)

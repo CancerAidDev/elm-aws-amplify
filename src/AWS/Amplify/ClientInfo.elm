@@ -1,9 +1,25 @@
 module AWS.Amplify.ClientInfo exposing (ClientInfo, decoder)
 
+{-| ClientInfo data type.
+
+
+# ClientInfo
+
+@docs ClientInfo, decoder
+
+-}
+
 import Json.Decode as Decode
 import Json.Decode.Pipeline as DecodePipeline
 
 
+{-| Data type for storing client information.
+
+See [ClientDevice/browser.ts][browser] for how to populate this record
+
+[browser]: https://github.com/aws-amplify/amplify-js/blob/5b4641b8568e3106db81958f1cb2ce0b6d684ab6/packages/core/src/ClientDevice/browser.ts
+
+-}
 type alias ClientInfo =
     { platform : String
     , make : String
@@ -15,6 +31,8 @@ type alias ClientInfo =
     }
 
 
+{-| Json Decoder for ClientInfo
+-}
 decoder : Decode.Decoder ClientInfo
 decoder =
     Decode.succeed ClientInfo

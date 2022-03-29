@@ -18,7 +18,7 @@ import Time
 
 type alias Flags =
     { seed : ( Int, List Int )
-    , appId : String
+    , pinpointProjectId : String
     , identityPoolId : String
     , clientInfo : ClientInfo
     , region : String
@@ -49,7 +49,7 @@ type alias ConfigureAnalyticsResult =
 
 
 init : Flags -> ( Model, Cmd Msg )
-init { seed, identityPoolId, clientInfo, appId, region } =
+init { seed, identityPoolId, clientInfo, pinpointProjectId, region } =
     let
         ( baseSeed, seedExtension ) =
             seed
@@ -60,7 +60,7 @@ init { seed, identityPoolId, clientInfo, appId, region } =
     in
     ( { identityPoolId = identityPoolId
       , clientInfo = clientInfo
-      , applicationId = appId
+      , applicationId = pinpointProjectId
       , sessionId = Uuid.toString sessionId
       , region = region
       , seed = currentSeed

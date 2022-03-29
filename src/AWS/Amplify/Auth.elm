@@ -1,4 +1,21 @@
-module AWS.Amplify.Auth exposing (Config, Identity, configure)
+module AWS.Amplify.Auth exposing
+    ( Identity
+    , Config, configure
+    )
+
+{-| Configure authentication using Amazon Cognito.
+
+
+# Identity
+
+@docs Identity
+
+
+# Configure
+
+@docs Config, configure
+
+-}
 
 import AWS.CognitoIdentity as CognitoIdentity
 import AWS.Config
@@ -9,20 +26,37 @@ import Maybe.Extra as MaybeExtra
 import Task exposing (Task)
 
 
-type alias Config =
-    { region : AWS.Config.Region
-    , identityPoolId : String
-    }
+
+-- IDENTITY
 
 
+{-| IdentityId
+-}
 type alias Identity =
     { identityId : String
     , credentials : Credentials
     }
 
 
+
+-- CONFIGURE
+
+
+{-| Auth config
+-}
+type alias Config =
+    { region : AWS.Config.Region
+    , identityPoolId : String
+    }
+
+
+{-| Configure authentication.
+
+Fetches identity id from identity pool and the fetches credentials for identity id.
+
+-}
 configure : Config -> Task (AWS.Http.Error AWS.Http.AWSAppError) Identity
-configure { identityPoolId, region } =
+configure { region, identityPoolId } =
     getId region identityPoolId
         |> Task.andThen
             (\{ identityId } ->
@@ -57,6 +91,8 @@ configure { identityPoolId, region } =
             )
 
 
+{-| Get identityId
+-}
 getId : AWS.Config.Region -> String -> Task (AWS.Http.Error AWS.Http.AWSAppError) CognitoIdentity.GetIdResponse
 getId region identityPoolId =
     AWS.Http.sendUnsigned (CognitoIdentity.service region)
@@ -68,6 +104,8 @@ getId region identityPoolId =
         )
 
 
+{-| Get credentials for identityId
+-}
 getCredentials : AWS.Config.Region -> String -> Task (AWS.Http.Error AWS.Http.AWSAppError) CognitoIdentity.GetCredentialsForIdentityResponse
 getCredentials region identityId =
     AWS.Http.sendUnsigned (CognitoIdentity.service region)
