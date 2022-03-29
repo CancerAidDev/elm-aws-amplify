@@ -52,7 +52,12 @@ type alias Config =
 
 {-| Configure authentication.
 
-Fetches identity id from identity pool and the fetches credentials for identity id.
+Fetches identity id from identity pool and then fetches credentials for identity id.
+
+    AWS.Amplify.Auth.configure
+        { region = "ap-southeast-2"
+        , identityPoolId = "ap-southeast-2:123e4567-e89b-12d3-a456-426614174000"
+        }
 
 -}
 configure : Config -> Task (AWS.Http.Error AWS.Http.AWSAppError) Identity

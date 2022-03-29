@@ -20,7 +20,7 @@ See `examples/Main.elm` for example application.
 
 ### Setup
 
-```
+```bash
 yarn install
 AWS_REGION=... PINPOINT_PROJECT_ID=... IDENTITY_POOL_ID=... yarn start
 ```
