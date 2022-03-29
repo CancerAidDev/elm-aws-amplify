@@ -27,6 +27,7 @@
             "elm/url": "1.0.0",
             "elm/virtual-dom": "1.0.2",
             "elm-community/json-extra": "4.3.0",
+            "elm-community/maybe-extra": "5.3.0",
             "ktonon/elm-crypto": "1.1.2",
             "ktonon/elm-word": "2.1.2",
             "miniBill/elm-codec": "1.2.0",

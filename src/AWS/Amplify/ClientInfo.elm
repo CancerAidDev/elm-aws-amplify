@@ -1,4 +1,4 @@
-module AWS.ClientInfo exposing (ClientInfo, decoder)
+module AWS.Amplify.ClientInfo exposing (ClientInfo, decoder)
 
 import Json.Decode as Decode
 import Json.Decode.Pipeline as DecodePipeline

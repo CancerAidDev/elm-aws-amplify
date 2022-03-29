@@ -1,1 +1,2 @@
-# elm-aws-pinpoint
+# elm-aws-amplify
+

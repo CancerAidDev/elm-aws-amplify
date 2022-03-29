@@ -1,24 +1,20 @@
 module Main exposing (main)
 
-import AWS.Amplify as Amplify
-import AWS.ClientInfo exposing (ClientInfo)
+import AWS.Amplify.Analytics as Analytics
+import AWS.Amplify.Auth as Auth
+import AWS.Amplify.ClientInfo exposing (ClientInfo)
 import AWS.Credentials exposing (Credentials)
+import AWS.Http
+import AWS.Pinpoint as Pinpoint
 import Browser
 import Dict
 import Html exposing (Html, button, div, h1, h2, input, label, text)
 import Html.Attributes exposing (value)
 import Html.Events exposing (onClick, onInput)
-import Random.Pcg.Extended exposing (initialSeed)
+import Prng.Uuid as Uuid
+import Random.Pcg.Extended exposing (Seed, initialSeed, step)
 import Task
 import Time
-
-
-type alias Model =
-    { amplify : Amplify.Model
-    , name : String
-    , key : String
-    , value : String
-    }
 
 
 type alias Flags =
@@ -30,10 +26,63 @@ type alias Flags =
     }
 
 
+type alias Model =
+    { identityPoolId : String
+    , clientInfo : ClientInfo
+    , applicationId : String
+    , sessionId : String
+    , region : String
+    , seed : Seed
+    , name : String
+    , key : String
+    , value : String
+    , identity : Maybe Auth.Identity
+    , analyticsConfigured : Bool
+    }
+
+
+type alias ConfigureAuthResult =
+    Result (AWS.Http.Error AWS.Http.AWSAppError) Auth.Identity
+
+
+type alias ConfigureAnalyticsResult =
+    Result
+        (AWS.Http.Error AWS.Http.AWSAppError)
+        Pinpoint.UpdateEndpointResponse
+
+
+init : Flags -> ( Model, Cmd Msg )
+init { seed, identityPoolId, clientInfo, appId, region } =
+    let
+        ( baseSeed, seedExtension ) =
+            seed
+
+        ( sessionId, currentSeed ) =
+            initialSeed baseSeed seedExtension
+                |> step Uuid.generator
+    in
+    ( { identityPoolId = identityPoolId
+      , clientInfo = clientInfo
+      , applicationId = appId
+      , sessionId = Uuid.toString sessionId
+      , region = region
+      , seed = currentSeed
+      , name = "Test"
+      , key = "Hello"
+      , value = "World"
+      , identity = Nothing
+      , analyticsConfigured = False
+      }
+    , Auth.configure { region = region, identityPoolId = identityPoolId }
+        |> Task.attempt AuthConfigured
+    )
+
+
 type Msg
-    = Record String Credentials
-    | RecordWithTime String Credentials Time.Posix
-    | AmplifyMsg Amplify.Msg
+    = AuthConfigured ConfigureAuthResult
+    | AnalyticsConfigured ConfigureAnalyticsResult
+    | Record Auth.Identity
+    | RecordWithTime Auth.Identity Time.Posix
     | UpdateName String
     | UpdateKey String
     | UpdateValue String
@@ -43,28 +92,70 @@ type Msg
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
-        Record identityId credentials ->
-            ( model
-            , Time.now
-                |> Task.attempt
-                    (Result.map (RecordWithTime identityId credentials)
-                        >> Result.withDefault NoOp
+        AuthConfigured result ->
+            result
+                |> Result.map
+                    (\identity ->
+                        let
+                            ( endpointId, seed1 ) =
+                                step Uuid.generator model.seed
+
+                            ( requestId, seed2 ) =
+                                step Uuid.generator seed1
+                        in
+                        ( { model | seed = seed2, identity = Just identity }
+                        , Task.attempt AnalyticsConfigured
+                            (Analytics.configure
+                                { credentials = identity.credentials
+                                , clientInfo = model.clientInfo
+                                , applicationId = model.applicationId
+                                , sessionId = model.sessionId
+                                , identityId = identity.identityId
+                                , region = model.region
+                                }
+                                { endpointId = Uuid.toString endpointId
+                                , requestId = Uuid.toString requestId
+                                }
+                            )
+                        )
                     )
+                |> Result.withDefault ( model, Cmd.none )
+
+        AnalyticsConfigured result ->
+            case result of
+                Ok _ ->
+                    ( { model | analyticsConfigured = True }, Cmd.none )
+
+                Err _ ->
+                    ( model, Cmd.none )
+
+        Record identity ->
+            ( model
+            , Time.now |> Task.perform (RecordWithTime identity)
             )
 
-        RecordWithTime identityId credentials time ->
-            Amplify.record identityId
-                credentials
-                model.amplify
-                { name = model.name
-                , timestamp = time
-                , attributes = Dict.fromList [ ( model.key, model.value ) ]
-                }
-                |> Tuple.mapBoth (\updated -> { model | amplify = updated }) (Cmd.map AmplifyMsg)
-
-        AmplifyMsg subMsg ->
-            Amplify.update subMsg model.amplify
-                |> Tuple.mapBoth (\updated -> { model | amplify = updated }) (Cmd.map AmplifyMsg)
+        RecordWithTime identity time ->
+            let
+                ( eventId, seed1 ) =
+                    step Uuid.generator model.seed
+            in
+            ( { model | seed = seed1, identity = Just identity }
+            , Task.attempt (always NoOp)
+                (Analytics.record
+                    { credentials = identity.credentials
+                    , clientInfo = model.clientInfo
+                    , applicationId = model.applicationId
+                    , sessionId = model.sessionId
+                    , identityId = identity.identityId
+                    , region = model.region
+                    }
+                    { eventId = Uuid.toString eventId
+                    , name = model.name
+                    , timestamp = time
+                    , attributes = Dict.fromList [ ( model.key, model.value ) ]
+                    }
+                )
+            )
 
         UpdateName val ->
             ( { model | name = val }, Cmd.none )
@@ -81,11 +172,11 @@ update msg model =
 
 view : Model -> Html Msg
 view model =
-    case ( model.amplify.credentials, model.amplify.identityId ) of
-        ( Just credentials, Just identityId ) ->
+    case model.identity of
+        Just identity ->
             div []
                 [ h2 [] [ text "IdentityId" ]
-                , div [] [ text identityId ]
+                , div [] [ text identity.identityId ]
                 , h1 [] [ text "Record" ]
                 , h2 [] [ text "Name" ]
                 , input [ value model.name, onInput UpdateName ] []
@@ -100,29 +191,11 @@ view model =
                         , input [ value model.value, onInput UpdateValue ] []
                         ]
                     ]
-                , div [] [ button [ onClick <| Record identityId credentials ] [ text "Submit" ] ]
+                , div [] [ button [ onClick <| Record identity ] [ text "Submit" ] ]
                 ]
 
-        _ ->
+        Nothing ->
             text ""
-
-
-init : Flags -> ( Model, Cmd Msg )
-init { seed, identityPoolId, clientInfo, appId, region } =
-    let
-        ( baseSeed, seedExtension ) =
-            seed
-
-        ( amplify, cmd ) =
-            Amplify.init
-                { identityPoolId = identityPoolId
-                , clientInfo = clientInfo
-                , applicationId = appId
-                , region = region
-                , seed = initialSeed baseSeed seedExtension
-                }
-    in
-    ( { amplify = amplify, name = "Test", key = "Hello", value = "World" }, Cmd.map AmplifyMsg cmd )
 
 
 main : Program Flags Model Msg
