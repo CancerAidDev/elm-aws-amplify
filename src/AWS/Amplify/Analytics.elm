@@ -52,7 +52,7 @@ type alias Endpoint =
     }
 
 
-{-| Configre analytics
+{-| Configure analytics
 -}
 configure : Config -> Endpoint -> Task (AWS.Http.Error AWS.Http.AWSAppError) Pinpoint.UpdateEndpointResponse
 configure { credentials, clientInfo, applicationId, identityId, region } { endpointId, requestId } =
