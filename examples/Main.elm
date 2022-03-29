@@ -3,13 +3,12 @@ module Main exposing (main)
 import AWS.Amplify.Analytics as Analytics
 import AWS.Amplify.Auth as Auth
 import AWS.Amplify.ClientInfo exposing (ClientInfo)
-import AWS.Credentials exposing (Credentials)
 import AWS.Http
 import AWS.Pinpoint as Pinpoint
 import Browser
 import Dict
 import Html exposing (Html, button, div, h1, h2, input, label, text)
-import Html.Attributes exposing (value)
+import Html.Attributes exposing (disabled, value)
 import Html.Events exposing (onClick, onInput)
 import Prng.Uuid as Uuid
 import Random.Pcg.Extended exposing (Seed, initialSeed, step)
@@ -46,9 +45,7 @@ type alias ConfigureAuthResult =
 
 
 type alias ConfigureAnalyticsResult =
-    Result
-        (AWS.Http.Error AWS.Http.AWSAppError)
-        Pinpoint.UpdateEndpointResponse
+    Result (AWS.Http.Error AWS.Http.AWSAppError) Pinpoint.UpdateEndpointResponse
 
 
 init : Flags -> ( Model, Cmd Msg )
@@ -83,6 +80,7 @@ type Msg
     | AnalyticsConfigured ConfigureAnalyticsResult
     | Record Auth.Identity
     | RecordWithTime Auth.Identity Time.Posix
+    | Recorded (Result (AWS.Http.Error AWS.Http.AWSAppError) Pinpoint.PutEventsResponse)
     | UpdateName String
     | UpdateKey String
     | UpdateValue String
@@ -122,6 +120,10 @@ update msg model =
                 |> Result.withDefault ( model, Cmd.none )
 
         AnalyticsConfigured result ->
+            let
+                _ =
+                    Debug.log "" result
+            in
             case result of
                 Ok _ ->
                     ( { model | analyticsConfigured = True }, Cmd.none )
@@ -140,7 +142,7 @@ update msg model =
                     step Uuid.generator model.seed
             in
             ( { model | seed = seed1, identity = Just identity }
-            , Task.attempt (always NoOp)
+            , Task.attempt Recorded
                 (Analytics.record
                     { credentials = identity.credentials
                     , clientInfo = model.clientInfo
@@ -156,6 +158,13 @@ update msg model =
                     }
                 )
             )
+
+        Recorded result ->
+            let
+                _ =
+                    Debug.log "" result
+            in
+            ( model, Cmd.none )
 
         UpdateName val ->
             ( { model | name = val }, Cmd.none )
@@ -191,7 +200,13 @@ view model =
                         , input [ value model.value, onInput UpdateValue ] []
                         ]
                     ]
-                , div [] [ button [ onClick <| Record identity ] [ text "Submit" ] ]
+                , div []
+                    [ button
+                        [ onClick <| Record identity
+                        , disabled (not model.analyticsConfigured)
+                        ]
+                        [ text "Submit" ]
+                    ]
                 ]
 
         Nothing ->

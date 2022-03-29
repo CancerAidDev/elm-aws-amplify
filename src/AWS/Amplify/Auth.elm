@@ -2,7 +2,7 @@ module AWS.Amplify.Auth exposing (Config, Identity, configure)
 
 import AWS.CognitoIdentity as CognitoIdentity
 import AWS.Config
-import AWS.Credentials as Credentials
+import AWS.Credentials exposing (Credentials)
 import AWS.Http
 import Http
 import Maybe.Extra as MaybeExtra
@@ -17,7 +17,7 @@ type alias Config =
 
 type alias Identity =
     { identityId : String
-    , credentials : Credentials.Credentials
+    , credentials : Credentials
     }
 
 

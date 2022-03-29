@@ -8,7 +8,7 @@ module AWS.Amplify.Analytics exposing
 
 import AWS.Amplify.ClientInfo exposing (ClientInfo)
 import AWS.Config
-import AWS.Credentials as Credentials
+import AWS.Credentials exposing (Credentials)
 import AWS.Http
 import AWS.Pinpoint as Pinpoint
 import Dict exposing (Dict)
@@ -18,7 +18,7 @@ import Time
 
 
 type alias Config =
-    { credentials : Credentials.Credentials
+    { credentials : Credentials
     , clientInfo : ClientInfo
     , applicationId : String
     , sessionId : String

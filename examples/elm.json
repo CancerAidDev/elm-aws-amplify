@@ -13,7 +13,7 @@
             "NoRedInk/elm-uuid": "2.0.0",
             "canceraiddev/elm-aws-cognito": "1.0.0",
             "canceraiddev/elm-aws-core": "1.0.0",
-            "canceraiddev/elm-aws-pinpoint": "1.0.0",
+            "canceraiddev/elm-aws-pinpoint": "1.0.1",
             "elm/browser": "1.0.2",
             "elm/bytes": "1.0.8",
             "elm/core": "1.0.5",
