@@ -7,11 +7,12 @@ import AWS.Http
 import AWS.Pinpoint as Pinpoint
 import Browser
 import Dict
-import Html exposing (Html, button, div, h1, h2, input, label, text)
-import Html.Attributes exposing (disabled, value)
+import Html exposing (Html, button, div, h1, h2, h3, input, label, text)
+import Html.Attributes exposing (disabled, style, value)
 import Html.Events exposing (onClick, onInput)
 import Prng.Uuid as Uuid
 import Random.Pcg.Extended exposing (Seed, initialSeed, step)
+import RemoteData exposing (RemoteData)
 import Task
 import Time
 
@@ -35,17 +36,10 @@ type alias Model =
     , name : String
     , key : String
     , value : String
-    , identity : Maybe Auth.Identity
-    , analyticsConfigured : Bool
+    , identity : RemoteData String Auth.Identity
+    , analyticsConfigured : RemoteData (AWS.Http.Error AWS.Http.AWSAppError) Pinpoint.UpdateEndpointResponse
+    , analyticsRecorded : RemoteData (AWS.Http.Error AWS.Http.AWSAppError) Pinpoint.PutEventsResponse
     }
-
-
-type alias ConfigureAuthResult =
-    Result (AWS.Http.Error AWS.Http.AWSAppError) Auth.Identity
-
-
-type alias ConfigureAnalyticsResult =
-    Result (AWS.Http.Error AWS.Http.AWSAppError) Pinpoint.UpdateEndpointResponse
 
 
 init : Flags -> ( Model, Cmd Msg )
@@ -67,8 +61,9 @@ init { seed, identityPoolId, clientInfo, pinpointProjectId, region } =
       , name = "Test"
       , key = "Hello"
       , value = "World"
-      , identity = Nothing
-      , analyticsConfigured = False
+      , identity = RemoteData.Loading
+      , analyticsConfigured = RemoteData.NotAsked
+      , analyticsRecorded = RemoteData.NotAsked
       }
     , Auth.configure { region = region, identityPoolId = identityPoolId }
         |> Task.attempt AuthConfigured
@@ -76,8 +71,8 @@ init { seed, identityPoolId, clientInfo, pinpointProjectId, region } =
 
 
 type Msg
-    = AuthConfigured ConfigureAuthResult
-    | AnalyticsConfigured ConfigureAnalyticsResult
+    = AuthConfigured (Result (AWS.Http.Error AWS.Http.AWSAppError) Auth.Identity)
+    | AnalyticsConfigured (Result (AWS.Http.Error AWS.Http.AWSAppError) Pinpoint.UpdateEndpointResponse)
     | Record Auth.Identity
     | RecordWithTime Auth.Identity Time.Posix
     | Recorded (Result (AWS.Http.Error AWS.Http.AWSAppError) Pinpoint.PutEventsResponse)
@@ -101,7 +96,7 @@ update msg model =
                             ( requestId, seed2 ) =
                                 step Uuid.generator seed1
                         in
-                        ( { model | seed = seed2, identity = Just identity }
+                        ( { model | seed = seed2, identity = RemoteData.Success identity }
                         , Task.attempt AnalyticsConfigured
                             (Analytics.configure
                                 { credentials = identity.credentials
@@ -117,31 +112,23 @@ update msg model =
                             )
                         )
                     )
-                |> Result.withDefault ( model, Cmd.none )
+                |> Result.withDefault
+                    ( { model | identity = RemoteData.Failure "Failed to fetch identity" }
+                    , Cmd.none
+                    )
 
         AnalyticsConfigured result ->
-            let
-                _ =
-                    Debug.log "" result
-            in
-            case result of
-                Ok _ ->
-                    ( { model | analyticsConfigured = True }, Cmd.none )
-
-                Err _ ->
-                    ( model, Cmd.none )
+            ( { model | analyticsConfigured = RemoteData.fromResult result }, Cmd.none )
 
         Record identity ->
-            ( model
-            , Time.now |> Task.perform (RecordWithTime identity)
-            )
+            ( model, Time.now |> Task.perform (RecordWithTime identity) )
 
         RecordWithTime identity time ->
             let
                 ( eventId, seed1 ) =
                     step Uuid.generator model.seed
             in
-            ( { model | seed = seed1, identity = Just identity }
+            ( { model | seed = seed1 }
             , Task.attempt Recorded
                 (Analytics.record
                     { credentials = identity.credentials
@@ -160,11 +147,7 @@ update msg model =
             )
 
         Recorded result ->
-            let
-                _ =
-                    Debug.log "" result
-            in
-            ( model, Cmd.none )
+            ( { model | analyticsRecorded = RemoteData.fromResult result }, Cmd.none )
 
         UpdateName val ->
             ( { model | name = val }, Cmd.none )
@@ -182,35 +165,72 @@ update msg model =
 view : Model -> Html Msg
 view model =
     case model.identity of
-        Just identity ->
+        RemoteData.Success identity ->
             div []
-                [ h2 [] [ text "IdentityId" ]
+                [ h1 [] [ text "elm-aws-amplify example" ]
+                , h2 [] [ text "IdentityId" ]
                 , div [] [ text identity.identityId ]
-                , h1 [] [ text "Record" ]
-                , h2 [] [ text "Name" ]
-                , input [ value model.name, onInput UpdateName ] []
-                , h2 [] [ text "Attributes" ]
-                , div []
-                    [ div []
-                        [ label [] [ text "Key: " ]
-                        , input [ value model.key, onInput UpdateKey ] []
-                        ]
-                    , div []
-                        [ label [] [ text "Value: " ]
-                        , input [ value model.value, onInput UpdateValue ] []
-                        ]
-                    ]
-                , div []
-                    [ button
-                        [ onClick <| Record identity
-                        , disabled (not model.analyticsConfigured)
-                        ]
-                        [ text "Submit" ]
-                    ]
+                , case model.analyticsConfigured of
+                    RemoteData.Success _ ->
+                        div []
+                            [ h2 [] [ text "Record" ]
+                            , h3 [] [ text "Name" ]
+                            , input [ value model.name, onInput UpdateName ] []
+                            , h3 [] [ text "Attributes" ]
+                            , div []
+                                [ div []
+                                    [ label [] [ text "Key: " ]
+                                    , input [ value model.key, onInput UpdateKey ] []
+                                    ]
+                                , div []
+                                    [ label [] [ text "Value: " ]
+                                    , input [ value model.value, onInput UpdateValue ] []
+                                    ]
+                                ]
+                            , let
+                                viewResponse str =
+                                    div [] [ h3 [] [ text "Response" ], text str ]
+                              in
+                              case model.analyticsRecorded of
+                                RemoteData.Success val ->
+                                    viewResponse (Debug.toString val)
+
+                                RemoteData.Loading ->
+                                    viewResponse "Loading..."
+
+                                RemoteData.NotAsked ->
+                                    text ""
+
+                                RemoteData.Failure err ->
+                                    viewResponse (Debug.toString err)
+                            , div []
+                                [ button
+                                    [ onClick <| Record identity
+                                    , disabled (not (RemoteData.isSuccess model.analyticsConfigured))
+                                    , style "margin-top" "1.5em"
+                                    ]
+                                    [ text "Submit" ]
+                                ]
+                            ]
+
+                    RemoteData.Loading ->
+                        text "Loading..."
+
+                    RemoteData.NotAsked ->
+                        text ""
+
+                    RemoteData.Failure err ->
+                        text (Debug.toString err)
                 ]
 
-        Nothing ->
+        RemoteData.Loading ->
+            text "Loading..."
+
+        RemoteData.NotAsked ->
             text ""
+
+        RemoteData.Failure err ->
+            text err
 
 
 main : Program Flags Model Msg
