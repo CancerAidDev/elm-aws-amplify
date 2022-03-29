@@ -1,5 +1,6 @@
 module AWS.Amplify.Analytics exposing
     ( Config
+    , Endpoint
     , Event
     , configure
     , record
