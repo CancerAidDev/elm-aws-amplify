@@ -101,7 +101,6 @@ configure { credentials, clientInfo, applicationId, identityId, region } { endpo
 type alias Event =
     { eventId : String
     , name : String
-    , timestamp : Time.Posix
     , attributes : Dict String String
     }
 
@@ -109,7 +108,12 @@ type alias Event =
 {-| Record an event
 -}
 record : Config -> Event -> Task (AWS.Http.Error AWS.Http.AWSAppError) Pinpoint.PutEventsResponse
-record { credentials, applicationId, identityId, sessionId, region } { eventId, name, timestamp, attributes } =
+record config event =
+    Time.now |> Task.andThen (recordWithTime config event)
+
+
+recordWithTime : Config -> Event -> Time.Posix -> Task (AWS.Http.Error AWS.Http.AWSAppError) Pinpoint.PutEventsResponse
+recordWithTime { credentials, applicationId, identityId, sessionId, region } { eventId, name, attributes } time =
     AWS.Http.send (Pinpoint.service region)
         credentials
         (Pinpoint.putEvents
@@ -146,10 +150,10 @@ record { credentials, applicationId, identityId, sessionId, region } { eventId, 
                                             Just
                                                 { duration = Nothing
                                                 , id = sessionId
-                                                , startTimestamp = Iso8601.fromTime timestamp
+                                                , startTimestamp = Iso8601.fromTime time
                                                 , stopTimestamp = Nothing
                                                 }
-                                        , timestamp = Iso8601.fromTime timestamp
+                                        , timestamp = Iso8601.fromTime time
                                         }
                                       )
                                     ]

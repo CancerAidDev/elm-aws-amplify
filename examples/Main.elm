@@ -14,7 +14,6 @@ import Prng.Uuid as Uuid
 import Random.Pcg.Extended exposing (Seed, initialSeed, step)
 import RemoteData exposing (RemoteData)
 import Task
-import Time
 
 
 type alias Flags =
@@ -74,7 +73,6 @@ type Msg
     = AuthConfigured (Result (AWS.Http.Error AWS.Http.AWSAppError) Auth.Identity)
     | AnalyticsConfigured (Result (AWS.Http.Error AWS.Http.AWSAppError) Pinpoint.UpdateEndpointResponse)
     | Record Auth.Identity
-    | RecordWithTime Auth.Identity Time.Posix
     | Recorded (Result (AWS.Http.Error AWS.Http.AWSAppError) Pinpoint.PutEventsResponse)
     | UpdateName String
     | UpdateKey String
@@ -121,9 +119,6 @@ update msg model =
             ( { model | analyticsConfigured = RemoteData.fromResult result }, Cmd.none )
 
         Record identity ->
-            ( model, Time.now |> Task.perform (RecordWithTime identity) )
-
-        RecordWithTime identity time ->
             let
                 ( eventId, seed1 ) =
                     step Uuid.generator model.seed
@@ -140,7 +135,6 @@ update msg model =
                     }
                     { eventId = Uuid.toString eventId
                     , name = model.name
-                    , timestamp = time
                     , attributes = Dict.fromList [ ( model.key, model.value ) ]
                     }
                 )
