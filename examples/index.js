@@ -11,6 +11,7 @@ const getRandomInts = (n) => {
 
 const randInts = getRandomInts(5);
 const flags = {
+  date: new Date().toISOString(),
   seed: [randInts[0], randInts.slice(1)],
   pinpointProjectId: process.env.PINPOINT_PROJECT_ID,
   identityPoolId: process.env.IDENTITY_POOL_ID,

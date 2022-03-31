@@ -39,6 +39,7 @@ type alias Config =
     , clientInfo : ClientInfo
     , applicationId : String
     , sessionId : String
+    , sessionStartTime : Time.Posix
     , identityId : String
     , region : AWS.Config.Region
     }
@@ -113,7 +114,7 @@ record config event =
 
 
 recordWithTime : Config -> Event -> Time.Posix -> Task (AWS.Http.Error AWS.Http.AWSAppError) Pinpoint.PutEventsResponse
-recordWithTime { credentials, applicationId, identityId, sessionId, region } { eventId, name, attributes } time =
+recordWithTime { credentials, applicationId, identityId, sessionId, sessionStartTime, region } { eventId, name, attributes } eventTime =
     AWS.Http.send (Pinpoint.service region)
         credentials
         (Pinpoint.putEvents
@@ -150,10 +151,10 @@ recordWithTime { credentials, applicationId, identityId, sessionId, region } { e
                                             Just
                                                 { duration = Nothing
                                                 , id = sessionId
-                                                , startTimestamp = Iso8601.fromTime time
+                                                , startTimestamp = Iso8601.fromTime sessionStartTime
                                                 , stopTimestamp = Nothing
                                                 }
-                                        , timestamp = Iso8601.fromTime time
+                                        , timestamp = Iso8601.fromTime eventTime
                                         }
                                       )
                                     ]

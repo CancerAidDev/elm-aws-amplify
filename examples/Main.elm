@@ -10,14 +10,18 @@ import Dict
 import Html exposing (Html, button, div, h1, h2, h3, input, label, text)
 import Html.Attributes exposing (disabled, style, value)
 import Html.Events exposing (onClick, onInput)
+import Iso8601
 import Prng.Uuid as Uuid
 import Random.Pcg.Extended exposing (Seed, initialSeed, step)
 import RemoteData exposing (RemoteData)
 import Task
+import Time
+import Time.Extra as TimeExtra
 
 
 type alias Flags =
     { seed : ( Int, List Int )
+    , date : String
     , pinpointProjectId : String
     , identityPoolId : String
     , clientInfo : ClientInfo
@@ -30,6 +34,7 @@ type alias Model =
     , clientInfo : ClientInfo
     , applicationId : String
     , sessionId : String
+    , sessionStartTime : Time.Posix
     , region : String
     , seed : Seed
     , name : String
@@ -41,8 +46,18 @@ type alias Model =
     }
 
 
+initTime : String -> Time.Posix
+initTime =
+    let
+        default =
+            TimeExtra.partsToPosix Time.utc <|
+                TimeExtra.Parts 2022 Time.Jan 1 0 0 0 0
+    in
+    Iso8601.toTime >> Result.withDefault default
+
+
 init : Flags -> ( Model, Cmd Msg )
-init { seed, identityPoolId, clientInfo, pinpointProjectId, region } =
+init { seed, date, identityPoolId, clientInfo, pinpointProjectId, region } =
     let
         ( baseSeed, seedExtension ) =
             seed
@@ -55,6 +70,7 @@ init { seed, identityPoolId, clientInfo, pinpointProjectId, region } =
       , clientInfo = clientInfo
       , applicationId = pinpointProjectId
       , sessionId = Uuid.toString sessionId
+      , sessionStartTime = initTime date
       , region = region
       , seed = currentSeed
       , name = "Test"
@@ -101,6 +117,7 @@ update msg model =
                                 , clientInfo = model.clientInfo
                                 , applicationId = model.applicationId
                                 , sessionId = model.sessionId
+                                , sessionStartTime = model.sessionStartTime
                                 , identityId = identity.identityId
                                 , region = model.region
                                 }
@@ -130,6 +147,7 @@ update msg model =
                     , clientInfo = model.clientInfo
                     , applicationId = model.applicationId
                     , sessionId = model.sessionId
+                    , sessionStartTime = model.sessionStartTime
                     , identityId = identity.identityId
                     , region = model.region
                     }
