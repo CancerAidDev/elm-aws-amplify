@@ -6,7 +6,9 @@
   "author": "CancerAidDev",
   "license": "Apache-2.0",
   "scripts": {
-    "start": "yarn parcel examples/index.html --no-cache"
+    "start": "yarn parcel examples/index.html --no-cache",
+    "build": "yarn elm make",
+    "build:example": "yarn parcel build examples/index.html"
   },
   "devDependencies": {
     "@parcel/transformer-elm": "2.4.0",

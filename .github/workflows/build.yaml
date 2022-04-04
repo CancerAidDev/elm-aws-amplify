@@ -41,4 +41,8 @@ jobs:
 
       - run: yarn elm-review
 
-      - run: yarn elm make
+      - name: Build package
+        run: yarn build
+
+      - name: Build example
+        run: yarn build:example
