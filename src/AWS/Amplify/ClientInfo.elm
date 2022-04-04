@@ -1,14 +1,15 @@
-module AWS.Amplify.ClientInfo exposing (ClientInfo, decoder)
+module AWS.Amplify.ClientInfo exposing (ClientInfo, decoder, toEndpointDemographic)
 
 {-| ClientInfo data type.
 
 
 # ClientInfo
 
-@docs ClientInfo, decoder
+@docs ClientInfo, decoder, toEndpointDemographic
 
 -}
 
+import AWS.Pinpoint exposing (EndpointDemographic)
 import Json.Decode as Decode
 import Json.Decode.Pipeline as DecodePipeline
 
@@ -43,3 +44,18 @@ decoder =
         |> DecodePipeline.required "appVersion" Decode.string
         |> DecodePipeline.required "language" Decode.string
         |> DecodePipeline.required "timezone" Decode.string
+
+
+{-| Convert to EndpointDemographic
+-}
+toEndpointDemographic : ClientInfo -> EndpointDemographic
+toEndpointDemographic clientInfo =
+    { appVersion = Just clientInfo.appVersion
+    , locale = Nothing
+    , make = Just clientInfo.make
+    , model = Just clientInfo.model
+    , modelVersion = Just clientInfo.version
+    , platform = Just clientInfo.platform
+    , platformVersion = Nothing
+    , timezone = Nothing
+    }

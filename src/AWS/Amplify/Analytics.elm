@@ -17,7 +17,7 @@ module AWS.Amplify.Analytics exposing
 
 -}
 
-import AWS.Amplify.ClientInfo exposing (ClientInfo)
+import AWS.Amplify.ClientInfo as ClientInfo exposing (ClientInfo)
 import AWS.Config
 import AWS.Credentials exposing (Credentials)
 import AWS.Http
@@ -66,17 +66,7 @@ configure { credentials, clientInfo, applicationId, identityId, region } { endpo
                 { address = Nothing
                 , attributes = Just Dict.empty
                 , channelType = Nothing
-                , demographic =
-                    Just
-                        { appVersion = Just clientInfo.appVersion
-                        , locale = Nothing
-                        , make = Just clientInfo.make
-                        , model = Just clientInfo.model
-                        , modelVersion = Just clientInfo.version
-                        , platform = Just clientInfo.platform
-                        , platformVersion = Nothing
-                        , timezone = Nothing
-                        }
+                , demographic = Just (ClientInfo.toEndpointDemographic clientInfo)
                 , effectiveDate = Nothing
                 , endpointStatus = Nothing
                 , location = Nothing
@@ -114,7 +104,7 @@ record config event =
 
 
 recordWithTime : Config -> Event -> Time.Posix -> Task (AWS.Http.Error AWS.Http.AWSAppError) Pinpoint.PutEventsResponse
-recordWithTime { credentials, applicationId, identityId, sessionId, sessionStartTime, region } { eventId, name, attributes } eventTime =
+recordWithTime { credentials, clientInfo, applicationId, identityId, sessionId, sessionStartTime, region } { eventId, name, attributes } eventTime =
     AWS.Http.send (Pinpoint.service region)
         credentials
         (Pinpoint.putEvents
@@ -127,7 +117,7 @@ recordWithTime { credentials, applicationId, identityId, sessionId, sessionStart
                                 { address = Nothing
                                 , attributes = Nothing
                                 , channelType = Nothing
-                                , demographic = Nothing
+                                , demographic = Just (ClientInfo.toEndpointDemographic clientInfo)
                                 , effectiveDate = Nothing
                                 , endpointStatus = Nothing
                                 , location = Nothing
