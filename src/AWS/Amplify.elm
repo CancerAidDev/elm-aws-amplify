@@ -1,4 +1,4 @@
-module AWS.Amplify exposing (..)
+module AWS.Amplify exposing (Event, Model, Msg, init, record, update)
 
 import AWS.Amplify.Analytics as Analytics
 import AWS.Amplify.Auth as Auth
@@ -41,6 +41,7 @@ type alias Config =
         { authConfigureFailed : Maybe (AWS.Http.Error AWS.Http.AWSAppError -> Cmd Msg)
         , analyticsConfigureFailed : Maybe (AWS.Http.Error AWS.Http.AWSAppError -> Cmd Msg)
         , recordFailed : Maybe (AWS.Http.Error AWS.Http.AWSAppError -> Cmd Msg)
+        , fetchNewCredentialsFailed : Maybe (AWS.Http.Error AWS.Http.AWSAppError -> Cmd Msg)
         }
     }
 
@@ -107,7 +108,7 @@ update config msg model =
 
         AuthFetchNewCredientalsFailed err ->
             ( model
-            , Maybe.map (\f -> f err) config.cmds.analyticsConfigureFailed |> Maybe.withDefault Cmd.none
+            , Maybe.map (\f -> f err) config.cmds.fetchNewCredentialsFailed |> Maybe.withDefault Cmd.none
             )
 
         Record event ->
@@ -230,7 +231,7 @@ recordWithAuth authIdentity event =
 recordWithAuthAndTime : Config -> Model -> Auth.Identity -> Analytics.Event -> Time.Posix -> ( Model, Cmd Msg )
 recordWithAuthAndTime config model authIdentity event time =
     if isValid authIdentity time then
-        ( model
+        ( { model | queue = Dict.remove event.eventId model.queue }
         , Analytics.record
             { credentials = authIdentity.credentials
             , clientInfo = config.clientInfo
@@ -256,4 +257,5 @@ recordWithAuthAndTime config model authIdentity event time =
 
 isValid : Auth.Identity -> Time.Posix -> Bool
 isValid { credentials } currentTime =
-    Time.posixToMillis currentTime < Time.posixToMillis credentials.expiration
+    -- Treat credentials as expired if expiration is in less than 60 seconds
+    Time.posixToMillis currentTime < Time.posixToMillis credentials.expiration - (60 * 1000)

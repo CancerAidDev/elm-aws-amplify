@@ -85,6 +85,7 @@ init { seed, date, identityPoolId, clientInfo, pinpointProjectId, region } =
 
 type Msg
     = AmplifyMsg Amplify.Msg
+    | Record
     | UpdateName String
     | UpdateKey String
     | UpdateValue String
@@ -105,11 +106,21 @@ update msg model =
                     { authConfigureFailed = Nothing
                     , analyticsConfigureFailed = Nothing
                     , recordFailed = Nothing
+                    , fetchNewCredentialsFailed = Nothing
                     }
                 }
                 subMsg
                 model.amplify
                 |> (\( updatedAmplify, cmd ) -> ( { model | amplify = updatedAmplify }, Cmd.map AmplifyMsg cmd ))
+
+        Record ->
+            ( model
+            , Cmd.map AmplifyMsg <|
+                Amplify.record
+                    { name = model.name
+                    , attributes = Dict.fromList [ ( model.key, model.value ) ]
+                    }
+            )
 
         UpdateName val ->
             ( { model | name = val }, Cmd.none )
@@ -126,78 +137,75 @@ update msg model =
 
 view : Model -> Html Msg
 view model =
-    case model.amplify.authIdentity of
-        RemoteData.Success authIdentity ->
-            div []
-                [ h1 [] [ text "elm-aws-amplify example" ]
-                , h2 [] [ text "IdentityId" ]
-                , div [] [ text authIdentity.identityId ]
-                , case model.amplify.analytics of
-                    RemoteData.Success _ ->
-                        div []
-                            [ h2 [] [ text "Record" ]
-                            , h3 [] [ text "Name" ]
-                            , input [ value model.name, onInput UpdateName ] []
-                            , h3 [] [ text "Attributes" ]
-                            , div []
-                                [ div []
-                                    [ label [] [ text "Key: " ]
-                                    , input [ value model.key, onInput UpdateKey ] []
-                                    ]
-                                , div []
-                                    [ label [] [ text "Value: " ]
-                                    , input [ value model.value, onInput UpdateValue ] []
-                                    ]
-                                ]
-                            , let
-                                viewResponse str =
-                                    div [] [ h3 [] [ text "Response" ], text str ]
-                              in
-                              case model.amplify.analytics of
-                                RemoteData.Success () ->
-                                    text ""
+    div []
+        [ h1 [] [ text "elm-aws-amplify example" ]
+        , h2 [] [ text "IdentityId" ]
+        , div []
+            [ case model.amplify.authIdentity of
+                RemoteData.Success authIdentity ->
+                    text authIdentity.identityId
 
-                                RemoteData.Loading ->
-                                    viewResponse "Loading..."
+                RemoteData.Loading ->
+                    text "Loading..."
 
-                                RemoteData.NotAsked ->
-                                    text ""
+                RemoteData.NotAsked ->
+                    text ""
 
-                                RemoteData.Failure err ->
-                                    viewResponse (Debug.toString err)
-                            , div []
-                                [ Html.map AmplifyMsg <|
-                                    button
-                                        [ onClick <|
-                                            Amplify.Record
-                                                { name = model.name
-                                                , attributes = Dict.fromList [ ( model.key, model.value ) ]
-                                                }
-                                        , disabled (not (RemoteData.isSuccess model.amplify.analytics))
-                                        , style "margin-top" "1.5em"
-                                        ]
-                                        [ text "Submit" ]
-                                ]
+                RemoteData.Failure err ->
+                    text (Debug.toString err)
+            ]
+        , case model.amplify.analytics of
+            RemoteData.Success _ ->
+                div []
+                    [ h2 [] [ text "Record" ]
+                    , h3 [] [ text "Name" ]
+                    , input [ value model.name, onInput UpdateName ] []
+                    , h3 [] [ text "Attributes" ]
+                    , div []
+                        [ div []
+                            [ label [] [ text "Key: " ]
+                            , input [ value model.key, onInput UpdateKey ] []
                             ]
+                        , div []
+                            [ label [] [ text "Value: " ]
+                            , input [ value model.value, onInput UpdateValue ] []
+                            ]
+                        ]
+                    , let
+                        viewResponse str =
+                            div [] [ h3 [] [ text "Response" ], text str ]
+                      in
+                      case model.amplify.analytics of
+                        RemoteData.Success () ->
+                            text ""
 
-                    RemoteData.Loading ->
-                        text "Loading..."
+                        RemoteData.Loading ->
+                            viewResponse "Loading..."
 
-                    RemoteData.NotAsked ->
-                        text ""
+                        RemoteData.NotAsked ->
+                            text ""
 
-                    RemoteData.Failure err ->
-                        text (Debug.toString err)
-                ]
+                        RemoteData.Failure err ->
+                            viewResponse (Debug.toString err)
+                    , div []
+                        [ button
+                            [ onClick Record
+                            , disabled (not (RemoteData.isSuccess model.amplify.analytics))
+                            , style "margin-top" "1.5em"
+                            ]
+                            [ text "Submit" ]
+                        ]
+                    ]
 
-        RemoteData.Loading ->
-            text "Loading..."
+            RemoteData.Loading ->
+                text "Loading..."
 
-        RemoteData.NotAsked ->
-            text ""
+            RemoteData.NotAsked ->
+                text ""
 
-        RemoteData.Failure err ->
-            text (Debug.toString err)
+            RemoteData.Failure err ->
+                text (Debug.toString err)
+        ]
 
 
 main : Program Flags Model Msg
