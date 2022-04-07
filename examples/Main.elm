@@ -101,9 +101,11 @@ update msg model =
                 , sessionStartTime = model.sessionStartTime
                 , awsRegion = model.region
                 , clientInfo = model.clientInfo
-                , authConfigureFailedCmd = Nothing
-                , analyticsConfigureFailedCmd = Nothing
-                , recordFailedCmd = Nothing
+                , cmds =
+                    { authConfigureFailed = Nothing
+                    , analyticsConfigureFailed = Nothing
+                    , recordFailed = Nothing
+                    }
                 }
                 subMsg
                 model.amplify

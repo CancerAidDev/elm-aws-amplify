@@ -1,4 +1,4 @@
-module AWS.Amplify exposing (Config, Model, Msg)
+module AWS.Amplify exposing (..)
 
 import AWS.Amplify.Analytics as Analytics
 import AWS.Amplify.Auth as Auth
@@ -37,10 +37,11 @@ type alias Config =
     , sessionStartTime : Time.Posix
     , awsRegion : String
     , clientInfo : ClientInfo
-    , cmds : {
-    , authConfigureFailedCmd : Maybe (AWS.Http.Error AWS.Http.AWSAppError -> Cmd Msg)
-    , analyticsConfigureFailedCmd : Maybe (AWS.Http.Error AWS.Http.AWSAppError -> Cmd Msg)
-    , recordFailedCmd : Maybe (AWS.Http.Error AWS.Http.AWSAppError -> Cmd Msg)}
+    , cmds :
+        { authConfigureFailed : Maybe (AWS.Http.Error AWS.Http.AWSAppError -> Cmd Msg)
+        , analyticsConfigureFailed : Maybe (AWS.Http.Error AWS.Http.AWSAppError -> Cmd Msg)
+        , recordFailed : Maybe (AWS.Http.Error AWS.Http.AWSAppError -> Cmd Msg)
+        }
     }
 
 
@@ -90,7 +91,7 @@ update config msg model =
 
         AuthConfigureFailed err ->
             ( { model | authIdentity = RemoteData.Failure err }
-            , Maybe.map (\f -> f err) config.authConfigureFailedCmd |> Maybe.withDefault Cmd.none
+            , Maybe.map (\f -> f err) config.cmds.authConfigureFailed |> Maybe.withDefault Cmd.none
             )
 
         AnalyticsConfigured authIdentity ->
@@ -98,7 +99,7 @@ update config msg model =
 
         AnalyticsConfigureFailed err ->
             ( { model | analytics = RemoteData.Failure err }
-            , Maybe.map (\f -> f err) config.analyticsConfigureFailedCmd |> Maybe.withDefault Cmd.none
+            , Maybe.map (\f -> f err) config.cmds.analyticsConfigureFailed |> Maybe.withDefault Cmd.none
             )
 
         AuthFetchedNewCredentials authIdentity ->
@@ -106,7 +107,7 @@ update config msg model =
 
         AuthFetchNewCredientalsFailed err ->
             ( model
-            , Maybe.map (\f -> f err) config.analyticsConfigureFailedCmd |> Maybe.withDefault Cmd.none
+            , Maybe.map (\f -> f err) config.cmds.analyticsConfigureFailed |> Maybe.withDefault Cmd.none
             )
 
         Record event ->
@@ -123,7 +124,7 @@ update config msg model =
 
         RecordFailed err ->
             ( model
-            , Maybe.map (\f -> f err) config.recordFailedCmd |> Maybe.withDefault Cmd.none
+            , Maybe.map (\f -> f err) config.cmds.recordFailed |> Maybe.withDefault Cmd.none
             )
 
 
