@@ -1,8 +1,7 @@
 module AWS.Amplify exposing
     ( Config, Model, init
     , update, Msg
-    , record
-    , Event
+    , record, Event
     )
 
 {-| Amplify component that handles refresh of expired cognito credentials.
@@ -20,7 +19,7 @@ module AWS.Amplify exposing
 
 # Record Events
 
-@docs record
+@docs record, Event
 
 -}
 
@@ -112,6 +111,8 @@ init { awsRegion, identityPoolId, time, seed } =
 -- TYPES
 
 
+{-| Event datatype
+-}
 type alias Event =
     { name : String
     , attributes : Dict String String
