@@ -1,4 +1,4 @@
-module AWS.Amplify exposing (..)
+module AWS.Amplify exposing (Config, Model, Msg)
 
 import AWS.Amplify.Analytics as Analytics
 import AWS.Amplify.Auth as Auth
@@ -24,47 +24,45 @@ type Msg
     | AnalyticsConfigureFailed (AWS.Http.Error AWS.Http.AWSAppError)
     | AuthFetchedNewCredentials Auth.Identity
     | AuthFetchNewCredientalsFailed (AWS.Http.Error AWS.Http.AWSAppError)
+    | Record Event
     | RecordWithTime Event Time.Posix
     | RecordWithAuthAndTime Auth.Identity Analytics.Event Time.Posix
     | Recorded
     | RecordFailed (AWS.Http.Error AWS.Http.AWSAppError)
 
 
-type Config
-    = Config
-        { identityPoolId : String
-        , pinpointProjectId : String
-        , sessionId : String
-        , startTime : Time.Posix
-        , awsRegion : String
-        , clientInfo : ClientInfo
-        , authConfigureFailed : Maybe (AWS.Http.Error AWS.Http.AWSAppError -> Cmd Msg)
-        , analyticsConfigureFailed : Maybe (AWS.Http.Error AWS.Http.AWSAppError -> Cmd Msg)
-        , recordFailed : Maybe (AWS.Http.Error AWS.Http.AWSAppError -> Cmd Msg)
-        }
+type alias Config =
+    { pinpointProjectId : String
+    , sessionId : String
+    , sessionStartTime : Time.Posix
+    , awsRegion : String
+    , clientInfo : ClientInfo
+    , cmds : {
+    , authConfigureFailedCmd : Maybe (AWS.Http.Error AWS.Http.AWSAppError -> Cmd Msg)
+    , analyticsConfigureFailedCmd : Maybe (AWS.Http.Error AWS.Http.AWSAppError -> Cmd Msg)
+    , recordFailedCmd : Maybe (AWS.Http.Error AWS.Http.AWSAppError -> Cmd Msg)}
+    }
 
 
 
 -- MODEL
 
 
-type Model
-    = Model
-        { seed : Seed
-        , authIdentity : RemoteData String Auth.Identity
-        , analyticsConfigured : Bool
-        , queue : Dict String Analytics.Event
-        }
+type alias Model =
+    { seed : Seed
+    , authIdentity : RemoteData (AWS.Http.Error AWS.Http.AWSAppError) Auth.Identity
+    , analytics : RemoteData (AWS.Http.Error AWS.Http.AWSAppError) ()
+    , queue : Dict String Analytics.Event
+    }
 
 
-init : Config -> Seed -> ( Model, Cmd Msg )
-init (Config { awsRegion, identityPoolId }) seed =
-    ( Model
-        { seed = seed
-        , authIdentity = RemoteData.Loading
-        , analyticsConfigured = False
-        , queue = Dict.empty
-        }
+init : { awsRegion : String, identityPoolId : String, seed : Seed } -> ( Model, Cmd Msg )
+init { awsRegion, identityPoolId, seed } =
+    ( { seed = seed
+      , authIdentity = RemoteData.Loading
+      , analytics = RemoteData.NotAsked
+      , queue = Dict.empty
+      }
     , Auth.configure { region = awsRegion, identityPoolId = identityPoolId }
         |> Task.attempt (Result.map AuthConfigured >> ResultExtra.extract AuthConfigureFailed)
     )
@@ -85,49 +83,52 @@ type alias Event =
 
 
 update : Config -> Msg -> Model -> ( Model, Cmd Msg )
-update (Config config) msg (Model model) =
+update config msg model =
     case msg of
         AuthConfigured authIdentity ->
-            configureAnalytics (Config config) (Model model) authIdentity
+            configureAnalytics config model authIdentity
 
         AuthConfigureFailed err ->
-            ( Model { model | authIdentity = RemoteData.Failure "Failed to fetch identity" }
-            , Maybe.map (\f -> f err) config.authConfigureFailed |> Maybe.withDefault Cmd.none
+            ( { model | authIdentity = RemoteData.Failure err }
+            , Maybe.map (\f -> f err) config.authConfigureFailedCmd |> Maybe.withDefault Cmd.none
             )
 
         AnalyticsConfigured authIdentity ->
-            processQueue (Model model) authIdentity
+            processQueue { model | analytics = RemoteData.Success () } authIdentity
 
         AnalyticsConfigureFailed err ->
-            ( Model model
-            , Maybe.map (\f -> f err) config.analyticsConfigureFailed |> Maybe.withDefault Cmd.none
+            ( { model | analytics = RemoteData.Failure err }
+            , Maybe.map (\f -> f err) config.analyticsConfigureFailedCmd |> Maybe.withDefault Cmd.none
             )
 
         AuthFetchedNewCredentials authIdentity ->
-            processQueue (Model model) authIdentity
+            processQueue model authIdentity
 
         AuthFetchNewCredientalsFailed err ->
-            ( Model model
-            , Maybe.map (\f -> f err) config.analyticsConfigureFailed |> Maybe.withDefault Cmd.none
+            ( model
+            , Maybe.map (\f -> f err) config.analyticsConfigureFailedCmd |> Maybe.withDefault Cmd.none
             )
 
+        Record event ->
+            ( model, record event )
+
         RecordWithTime event time ->
-            recordWithTime (Config config) (Model model) event time
+            recordWithTime config model event time
 
         RecordWithAuthAndTime authIdentity event time ->
-            recordWithAuthAndTime (Config config) (Model model) authIdentity event time
+            recordWithAuthAndTime config model authIdentity event time
 
         Recorded ->
-            ( Model model, Cmd.none )
+            ( model, Cmd.none )
 
         RecordFailed err ->
-            ( Model model
-            , Maybe.map (\f -> f err) config.recordFailed |> Maybe.withDefault Cmd.none
+            ( model
+            , Maybe.map (\f -> f err) config.recordFailedCmd |> Maybe.withDefault Cmd.none
             )
 
 
 configureAnalytics : Config -> Model -> Auth.Identity -> ( Model, Cmd Msg )
-configureAnalytics (Config config) (Model model) authIdentity =
+configureAnalytics config model authIdentity =
     let
         ( endpointId, seed1 ) =
             Seed.step Uuid.generator model.seed
@@ -135,7 +136,11 @@ configureAnalytics (Config config) (Model model) authIdentity =
         ( requestId, seed2 ) =
             Seed.step Uuid.generator seed1
     in
-    ( Model { model | seed = seed2, authIdentity = RemoteData.Success authIdentity }
+    ( { model
+        | seed = seed2
+        , authIdentity = RemoteData.Success authIdentity
+        , analytics = RemoteData.Loading
+      }
     , Task.attempt
         (Result.map (always (AnalyticsConfigured authIdentity))
             >> ResultExtra.extract AnalyticsConfigureFailed
@@ -145,7 +150,7 @@ configureAnalytics (Config config) (Model model) authIdentity =
             , clientInfo = config.clientInfo
             , applicationId = config.pinpointProjectId
             , sessionId = config.sessionId
-            , sessionStartTime = config.startTime
+            , sessionStartTime = config.sessionStartTime
             , identityId = authIdentity.identityId
             , region = config.awsRegion
             }
@@ -157,7 +162,7 @@ configureAnalytics (Config config) (Model model) authIdentity =
 
 
 processQueue : Model -> Auth.Identity -> ( Model, Cmd Msg )
-processQueue (Model model) authIdentity =
+processQueue model authIdentity =
     Dict.foldl
         (\_ event cmds ->
             recordWithAuth authIdentity event
@@ -166,7 +171,7 @@ processQueue (Model model) authIdentity =
         []
         model.queue
         |> (\cmds ->
-                ( Model { model | authIdentity = RemoteData.Success authIdentity }
+                ( { model | authIdentity = RemoteData.Success authIdentity }
                 , Cmd.batch cmds
                 )
            )
@@ -178,36 +183,42 @@ record event =
 
 
 recordWithTime : Config -> Model -> Event -> Time.Posix -> ( Model, Cmd Msg )
-recordWithTime config (Model model) event time =
+recordWithTime config model event time =
     let
+        ( eventId, seed1 ) =
+            Seed.step Uuid.generator model.seed
+
         analyticsEvent =
-            { eventId = ""
+            { eventId = Uuid.toString eventId
             , eventTime = time
             , name = event.name
             , attributes = event.attributes
             }
+
+        updatedModel =
+            { model | seed = seed1 }
     in
     case model.authIdentity of
         RemoteData.Success authIdentity ->
-            if model.analyticsConfigured then
-                recordWithAuthAndTime config (Model model) authIdentity analyticsEvent time
+            if RemoteData.isSuccess model.analytics then
+                recordWithAuthAndTime config updatedModel authIdentity analyticsEvent time
 
             else
-                ( recordEnqueue (Model model) analyticsEvent, Cmd.none )
+                ( recordEnqueue updatedModel analyticsEvent, Cmd.none )
 
         RemoteData.Loading ->
-            ( recordEnqueue (Model model) analyticsEvent, Cmd.none )
+            ( recordEnqueue updatedModel analyticsEvent, Cmd.none )
 
         RemoteData.Failure _ ->
-            ( Model model, Cmd.none )
+            ( model, Cmd.none )
 
         RemoteData.NotAsked ->
-            ( Model model, Cmd.none )
+            ( model, Cmd.none )
 
 
 recordEnqueue : Model -> Analytics.Event -> Model
-recordEnqueue (Model model) event =
-    Model { model | queue = Dict.insert event.eventId event model.queue }
+recordEnqueue model event =
+    { model | queue = Dict.insert event.eventId event model.queue }
 
 
 recordWithAuth : Auth.Identity -> Analytics.Event -> Cmd Msg
@@ -216,15 +227,15 @@ recordWithAuth authIdentity event =
 
 
 recordWithAuthAndTime : Config -> Model -> Auth.Identity -> Analytics.Event -> Time.Posix -> ( Model, Cmd Msg )
-recordWithAuthAndTime (Config config) (Model model) authIdentity event time =
+recordWithAuthAndTime config model authIdentity event time =
     if isValid authIdentity time then
-        ( Model model
+        ( model
         , Analytics.record
             { credentials = authIdentity.credentials
             , clientInfo = config.clientInfo
             , applicationId = config.pinpointProjectId
             , sessionId = config.sessionId
-            , sessionStartTime = config.startTime
+            , sessionStartTime = config.sessionStartTime
             , identityId = authIdentity.identityId
             , region = config.awsRegion
             }
@@ -233,7 +244,7 @@ recordWithAuthAndTime (Config config) (Model model) authIdentity event time =
         )
 
     else
-        ( recordEnqueue (Model { model | authIdentity = RemoteData.Loading }) event
+        ( recordEnqueue { model | authIdentity = RemoteData.Loading } event
         , Auth.getCredentials config.awsRegion authIdentity.identityId
             |> Task.attempt
                 (Result.map AuthFetchedNewCredentials
@@ -244,8 +255,4 @@ recordWithAuthAndTime (Config config) (Model model) authIdentity event time =
 
 isValid : Auth.Identity -> Time.Posix -> Bool
 isValid { credentials } currentTime =
-    credentials.expiration
-        |> String.toInt
-        |> Maybe.map (\seconds -> 1000 * seconds)
-        |> Maybe.map (\expirationTime -> Time.posixToMillis currentTime < expirationTime)
-        |> Maybe.withDefault True
+    Time.posixToMillis currentTime < Time.posixToMillis credentials.expiration

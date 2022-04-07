@@ -1,10 +1,7 @@
 module Main exposing (main)
 
-import AWS.Amplify.Analytics as Analytics
-import AWS.Amplify.Auth as Auth
+import AWS.Amplify as Amplify
 import AWS.Amplify.ClientInfo exposing (ClientInfo)
-import AWS.Http
-import AWS.Pinpoint as Pinpoint
 import Browser
 import Dict
 import Html exposing (Html, button, div, h1, h2, h3, input, label, text)
@@ -12,9 +9,8 @@ import Html.Attributes exposing (disabled, style, value)
 import Html.Events exposing (onClick, onInput)
 import Iso8601
 import Prng.Uuid as Uuid
-import Random.Pcg.Extended exposing (Seed, initialSeed, step)
-import RemoteData exposing (RemoteData)
-import Task
+import Random.Pcg.Extended exposing (initialSeed, step)
+import RemoteData
 import Time
 import Time.Extra as TimeExtra
 
@@ -31,18 +27,16 @@ type alias Flags =
 
 type alias Model =
     { identityPoolId : String
+    , pinpointProjectId : String
     , clientInfo : ClientInfo
     , applicationId : String
     , sessionId : String
     , sessionStartTime : Time.Posix
     , region : String
-    , seed : Seed
     , name : String
     , key : String
     , value : String
-    , identity : RemoteData String Auth.Identity
-    , analyticsConfigured : RemoteData (AWS.Http.Error AWS.Http.AWSAppError) Pinpoint.UpdateEndpointResponse
-    , analyticsRecorded : RemoteData (AWS.Http.Error AWS.Http.AWSAppError) Pinpoint.PutEventsResponse
+    , amplify : Amplify.Model
     }
 
 
@@ -65,31 +59,32 @@ init { seed, date, identityPoolId, clientInfo, pinpointProjectId, region } =
         ( sessionId, currentSeed ) =
             initialSeed baseSeed seedExtension
                 |> step Uuid.generator
+
+        ( amplify, cmd ) =
+            Amplify.init
+                { awsRegion = region
+                , identityPoolId = identityPoolId
+                , seed = currentSeed
+                }
     in
     ( { identityPoolId = identityPoolId
+      , pinpointProjectId = pinpointProjectId
       , clientInfo = clientInfo
       , applicationId = pinpointProjectId
       , sessionId = Uuid.toString sessionId
       , sessionStartTime = initTime date
       , region = region
-      , seed = currentSeed
       , name = "Test"
       , key = "Hello"
       , value = "World"
-      , identity = RemoteData.Loading
-      , analyticsConfigured = RemoteData.NotAsked
-      , analyticsRecorded = RemoteData.NotAsked
+      , amplify = amplify
       }
-    , Auth.configure { region = region, identityPoolId = identityPoolId }
-        |> Task.attempt AuthConfigured
+    , Cmd.map AmplifyMsg cmd
     )
 
 
 type Msg
-    = AuthConfigured (Result (AWS.Http.Error AWS.Http.AWSAppError) Auth.Identity)
-    | AnalyticsConfigured (Result (AWS.Http.Error AWS.Http.AWSAppError) Pinpoint.UpdateEndpointResponse)
-    | Record Auth.Identity
-    | Recorded (Result (AWS.Http.Error AWS.Http.AWSAppError) Pinpoint.PutEventsResponse)
+    = AmplifyMsg Amplify.Msg
     | UpdateName String
     | UpdateKey String
     | UpdateValue String
@@ -99,71 +94,20 @@ type Msg
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
-        AuthConfigured result ->
-            result
-                |> Result.map
-                    (\identity ->
-                        let
-                            ( endpointId, seed1 ) =
-                                step Uuid.generator model.seed
-
-                            ( requestId, seed2 ) =
-                                step Uuid.generator seed1
-                        in
-                        ( { model | seed = seed2, identity = RemoteData.Success identity }
-                        , Task.attempt AnalyticsConfigured
-                            (Analytics.configure
-                                { credentials = identity.credentials
-                                , clientInfo = model.clientInfo
-                                , applicationId = model.applicationId
-                                , sessionId = model.sessionId
-                                , sessionStartTime = model.sessionStartTime
-                                , identityId = identity.identityId
-                                , region = model.region
-                                }
-                                { endpointId = Uuid.toString endpointId
-                                , requestId = Uuid.toString requestId
-                                }
-                            )
-                        )
-                    )
-                |> Result.withDefault
-                    ( { model | identity = RemoteData.Failure "Failed to fetch identity" }
-                    , Cmd.none
-                    )
-
-        AnalyticsConfigured result ->
-            ( { model | analyticsConfigured = RemoteData.fromResult result }, Cmd.none )
-
-        Record identity ->
-            let
-                ( eventId, seed1 ) =
-                    step Uuid.generator model.seed
-            in
-            ( { model | seed = seed1 }
-            , Time.now
-                |> Task.andThen
-                    (\time ->
-                        Analytics.record
-                            { credentials = identity.credentials
-                            , clientInfo = model.clientInfo
-                            , applicationId = model.applicationId
-                            , sessionId = model.sessionId
-                            , sessionStartTime = model.sessionStartTime
-                            , identityId = identity.identityId
-                            , region = model.region
-                            }
-                            { eventId = Uuid.toString eventId
-                            , name = model.name
-                            , attributes = Dict.fromList [ ( model.key, model.value ) ]
-                            , eventTime = time
-                            }
-                    )
-                |> Task.attempt Recorded
-            )
-
-        Recorded result ->
-            ( { model | analyticsRecorded = RemoteData.fromResult result }, Cmd.none )
+        AmplifyMsg subMsg ->
+            Amplify.update
+                { pinpointProjectId = model.pinpointProjectId
+                , sessionId = model.sessionId
+                , sessionStartTime = model.sessionStartTime
+                , awsRegion = model.region
+                , clientInfo = model.clientInfo
+                , authConfigureFailedCmd = Nothing
+                , analyticsConfigureFailedCmd = Nothing
+                , recordFailedCmd = Nothing
+                }
+                subMsg
+                model.amplify
+                |> (\( updatedAmplify, cmd ) -> ( { model | amplify = updatedAmplify }, Cmd.map AmplifyMsg cmd ))
 
         UpdateName val ->
             ( { model | name = val }, Cmd.none )
@@ -180,13 +124,13 @@ update msg model =
 
 view : Model -> Html Msg
 view model =
-    case model.identity of
-        RemoteData.Success identity ->
+    case model.amplify.authIdentity of
+        RemoteData.Success authIdentity ->
             div []
                 [ h1 [] [ text "elm-aws-amplify example" ]
                 , h2 [] [ text "IdentityId" ]
-                , div [] [ text identity.identityId ]
-                , case model.analyticsConfigured of
+                , div [] [ text authIdentity.identityId ]
+                , case model.amplify.analytics of
                     RemoteData.Success _ ->
                         div []
                             [ h2 [] [ text "Record" ]
@@ -207,9 +151,9 @@ view model =
                                 viewResponse str =
                                     div [] [ h3 [] [ text "Response" ], text str ]
                               in
-                              case model.analyticsRecorded of
-                                RemoteData.Success val ->
-                                    viewResponse (Debug.toString val)
+                              case model.amplify.analytics of
+                                RemoteData.Success () ->
+                                    text ""
 
                                 RemoteData.Loading ->
                                     viewResponse "Loading..."
@@ -220,12 +164,17 @@ view model =
                                 RemoteData.Failure err ->
                                     viewResponse (Debug.toString err)
                             , div []
-                                [ button
-                                    [ onClick <| Record identity
-                                    , disabled (not (RemoteData.isSuccess model.analyticsConfigured))
-                                    , style "margin-top" "1.5em"
-                                    ]
-                                    [ text "Submit" ]
+                                [ Html.map AmplifyMsg <|
+                                    button
+                                        [ onClick <|
+                                            Amplify.Record
+                                                { name = model.name
+                                                , attributes = Dict.fromList [ ( model.key, model.value ) ]
+                                                }
+                                        , disabled (not (RemoteData.isSuccess model.amplify.analytics))
+                                        , style "margin-top" "1.5em"
+                                        ]
+                                        [ text "Submit" ]
                                 ]
                             ]
 
@@ -246,7 +195,7 @@ view model =
             text ""
 
         RemoteData.Failure err ->
-            text err
+            text (Debug.toString err)
 
 
 main : Program Flags Model Msg

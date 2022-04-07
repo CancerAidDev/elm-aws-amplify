@@ -5,6 +5,7 @@
     "license": "Apache-2.0",
     "version": "3.0.0",
     "exposed-modules": [
+        "AWS.Amplify",
         "AWS.Amplify.Analytics",
         "AWS.Amplify.Auth",
         "AWS.Amplify.ClientInfo"
@@ -14,7 +15,7 @@
         "NoRedInk/elm-json-decode-pipeline": "1.0.0 <= v < 2.0.0",
         "NoRedInk/elm-random-pcg-extended": "1.0.0 <= v < 2.0.0",
         "NoRedInk/elm-uuid": "2.0.0 <= v < 3.0.0",
-        "canceraiddev/elm-aws-cognito": "1.0.0 <= v < 2.0.0",
+        "canceraiddev/elm-aws-cognito": "2.0.0 <= v < 3.0.0",
         "canceraiddev/elm-aws-core": "1.0.0 <= v < 2.0.0",
         "canceraiddev/elm-aws-pinpoint": "1.0.1 <= v < 2.0.0",
         "elm/core": "1.0.0 <= v < 2.0.0",

@@ -22,6 +22,7 @@ import AWS.Config
 import AWS.Http
 import Http
 import Task exposing (Task)
+import Time
 
 
 
@@ -41,7 +42,7 @@ type alias Identity =
 type alias Credentials =
     { accessKeyId : String
     , secretAccessKey : String
-    , expiration : String
+    , expiration : Time.Posix
     , sessionToken : Maybe String
     }
 
