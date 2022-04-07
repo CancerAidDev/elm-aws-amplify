@@ -107,26 +107,28 @@ getCredentials region identityId =
         |> Task.andThen
             (\{ credentials } ->
                 credentials
-                    |> Maybe.andThen
-                        (\{ accessKeyId, secretKey, sessionToken, expiration } ->
-                            Maybe.map3
-                                (\accessKeyId_ secretAccessKey_ expiration_ ->
-                                    let
-                                        credentials_ =
-                                            { accessKeyId = accessKeyId_
-                                            , secretAccessKey = secretAccessKey_
-                                            , sessionToken = sessionToken
-                                            , expiration = expiration_
-                                            }
-                                    in
-                                    Task.succeed
-                                        { identityId = identityId
-                                        , credentials = credentials_
-                                        }
-                                )
-                                accessKeyId
-                                secretKey
-                                expiration
+                    |> Maybe.andThen cognitoCredentialsToAmplifyCredentials
+                    |> Maybe.map
+                        (\credentials_ ->
+                            Task.succeed
+                                { identityId = identityId
+                                , credentials = credentials_
+                                }
                         )
-                    |> Maybe.withDefault (Task.fail (AWS.Http.HttpError (Http.BadBody "Missing identityId or credentials")))
+                    |> Maybe.withDefault (Task.fail (AWS.Http.HttpError (Http.BadBody "Invalid credentials")))
             )
+
+
+cognitoCredentialsToAmplifyCredentials : CognitoIdentity.Credentials -> Maybe Credentials
+cognitoCredentialsToAmplifyCredentials { accessKeyId, secretKey, sessionToken, expiration } =
+    Maybe.map3
+        (\accessKeyId_ secretAccessKey_ expiration_ ->
+            { accessKeyId = accessKeyId_
+            , secretAccessKey = secretAccessKey_
+            , sessionToken = sessionToken
+            , expiration = expiration_
+            }
+        )
+        accessKeyId
+        secretKey
+        expiration
