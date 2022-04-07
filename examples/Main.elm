@@ -30,8 +30,6 @@ type alias Model =
     , pinpointProjectId : String
     , clientInfo : ClientInfo
     , applicationId : String
-    , sessionId : String
-    , sessionStartTime : Time.Posix
     , region : String
     , name : String
     , key : String
@@ -56,23 +54,18 @@ init { seed, date, identityPoolId, clientInfo, pinpointProjectId, region } =
         ( baseSeed, seedExtension ) =
             seed
 
-        ( sessionId, currentSeed ) =
-            initialSeed baseSeed seedExtension
-                |> step Uuid.generator
-
         ( amplify, cmd ) =
             Amplify.init
                 { awsRegion = region
                 , identityPoolId = identityPoolId
-                , seed = currentSeed
+                , time = initTime date
+                , seed = initialSeed baseSeed seedExtension
                 }
     in
     ( { identityPoolId = identityPoolId
       , pinpointProjectId = pinpointProjectId
       , clientInfo = clientInfo
       , applicationId = pinpointProjectId
-      , sessionId = Uuid.toString sessionId
-      , sessionStartTime = initTime date
       , region = region
       , name = "Test"
       , key = "Hello"
@@ -98,8 +91,6 @@ update msg model =
         AmplifyMsg subMsg ->
             Amplify.update
                 { pinpointProjectId = model.pinpointProjectId
-                , sessionId = model.sessionId
-                , sessionStartTime = model.sessionStartTime
                 , awsRegion = model.region
                 , clientInfo = model.clientInfo
                 , cmds =

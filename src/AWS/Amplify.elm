@@ -1,4 +1,28 @@
-module AWS.Amplify exposing (Event, Model, Msg, init, record, update)
+module AWS.Amplify exposing
+    ( Config, Model, init
+    , update, Msg
+    , record
+    , Event
+    )
+
+{-| Amplify component that handles refresh of expired cognito credentials.
+
+
+# Setup
+
+@docs Config, Model, init
+
+
+# Update
+
+@docs update, Msg
+
+
+# Record Events
+
+@docs record
+
+-}
 
 import AWS.Amplify.Analytics as Analytics
 import AWS.Amplify.Auth as Auth
@@ -17,6 +41,8 @@ import Time
 -- MSG
 
 
+{-| Opaque Msg datatype
+-}
 type Msg
     = AuthConfigured Auth.Identity
     | AuthConfigureFailed (AWS.Http.Error AWS.Http.AWSAppError)
@@ -31,10 +57,10 @@ type Msg
     | RecordFailed (AWS.Http.Error AWS.Http.AWSAppError)
 
 
+{-| Static configuration settings
+-}
 type alias Config =
     { pinpointProjectId : String
-    , sessionId : String
-    , sessionStartTime : Time.Posix
     , awsRegion : String
     , clientInfo : ClientInfo
     , cmds :
@@ -50,17 +76,29 @@ type alias Config =
 -- MODEL
 
 
+{-| Model datatype
+-}
 type alias Model =
     { seed : Seed
+    , sessionId : String
+    , sessionStartTime : Time.Posix
     , authIdentity : RemoteData (AWS.Http.Error AWS.Http.AWSAppError) Auth.Identity
     , analytics : RemoteData (AWS.Http.Error AWS.Http.AWSAppError) ()
     , queue : Dict String Analytics.Event
     }
 
 
-init : { awsRegion : String, identityPoolId : String, seed : Seed } -> ( Model, Cmd Msg )
-init { awsRegion, identityPoolId, seed } =
-    ( { seed = seed
+{-| Initialise Model and fetch identity and credentials
+-}
+init : { awsRegion : String, identityPoolId : String, time : Time.Posix, seed : Seed } -> ( Model, Cmd Msg )
+init { awsRegion, identityPoolId, time, seed } =
+    let
+        ( sessionId, seed1 ) =
+            Seed.step Uuid.generator seed
+    in
+    ( { seed = seed1
+      , sessionId = Uuid.toString sessionId
+      , sessionStartTime = time
       , authIdentity = RemoteData.Loading
       , analytics = RemoteData.NotAsked
       , queue = Dict.empty
@@ -84,6 +122,8 @@ type alias Event =
 -- UPDATE
 
 
+{-| Update
+-}
 update : Config -> Msg -> Model -> ( Model, Cmd Msg )
 update config msg model =
     case msg of
@@ -151,8 +191,8 @@ configureAnalytics config model authIdentity =
             { credentials = authIdentity.credentials
             , clientInfo = config.clientInfo
             , applicationId = config.pinpointProjectId
-            , sessionId = config.sessionId
-            , sessionStartTime = config.sessionStartTime
+            , sessionId = model.sessionId
+            , sessionStartTime = model.sessionStartTime
             , identityId = authIdentity.identityId
             , region = config.awsRegion
             }
@@ -179,6 +219,11 @@ processQueue model authIdentity =
            )
 
 
+{-| Record event.
+
+Events are stored in a queue if the identity, credentials, or analytics are loading.
+
+-}
 record : Event -> Cmd Msg
 record event =
     Task.perform (RecordWithTime event) Time.now
@@ -236,8 +281,8 @@ recordWithAuthAndTime config model authIdentity event time =
             { credentials = authIdentity.credentials
             , clientInfo = config.clientInfo
             , applicationId = config.pinpointProjectId
-            , sessionId = config.sessionId
-            , sessionStartTime = config.sessionStartTime
+            , sessionId = model.sessionId
+            , sessionStartTime = model.sessionStartTime
             , identityId = authIdentity.identityId
             , region = config.awsRegion
             }
