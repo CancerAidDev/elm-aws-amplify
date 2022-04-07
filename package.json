@@ -1,6 +1,6 @@
 {
   "name": "elm-aws-amplify",
-  "version": "3.0.0",
+  "version": "4.0.0",
   "repository": "git@github.com:CancerAidDev/elm-aws-amplify.git",
   "author": "CancerAidDev",
   "license": "Apache-2.0",

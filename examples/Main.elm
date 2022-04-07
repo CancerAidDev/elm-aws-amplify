@@ -93,10 +93,10 @@ update msg model =
                 , awsRegion = model.region
                 , clientInfo = model.clientInfo
                 , cmds =
-                    { authConfigureFailed = Nothing
-                    , analyticsConfigureFailed = Nothing
-                    , recordFailed = Nothing
-                    , fetchNewCredentialsFailed = Nothing
+                    { authConfigureFailed = Cmd.none
+                    , analyticsConfigureFailed = Cmd.none
+                    , recordFailed = Cmd.none
+                    , fetchNewCredentialsFailed = Cmd.none
                     }
                 }
                 subMsg

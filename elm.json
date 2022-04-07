@@ -3,7 +3,7 @@
     "name": "canceraiddev/elm-aws-amplify",
     "summary": "Elm client for the AWS Amplify services.",
     "license": "Apache-2.0",
-    "version": "3.0.0",
+    "version": "4.0.0",
     "exposed-modules": [
         "AWS.Amplify",
         "AWS.Amplify.Analytics",

@@ -63,10 +63,10 @@ type alias Config =
     , awsRegion : String
     , clientInfo : ClientInfo
     , cmds :
-        { authConfigureFailed : Maybe (AWS.Http.Error AWS.Http.AWSAppError -> Cmd Msg)
-        , analyticsConfigureFailed : Maybe (AWS.Http.Error AWS.Http.AWSAppError -> Cmd Msg)
-        , recordFailed : Maybe (AWS.Http.Error AWS.Http.AWSAppError -> Cmd Msg)
-        , fetchNewCredentialsFailed : Maybe (AWS.Http.Error AWS.Http.AWSAppError -> Cmd Msg)
+        { authConfigureFailed : AWS.Http.Error AWS.Http.AWSAppError -> Cmd Msg
+        , analyticsConfigureFailed : AWS.Http.Error AWS.Http.AWSAppError -> Cmd Msg
+        , recordFailed : AWS.Http.Error AWS.Http.AWSAppError -> Cmd Msg
+        , fetchNewCredentialsFailed : AWS.Http.Error AWS.Http.AWSAppError -> Cmd Msg
         }
     }
 
@@ -133,7 +133,7 @@ update config msg model =
 
         AuthConfigureFailed err ->
             ( { model | authIdentity = RemoteData.Failure err }
-            , Maybe.map (\f -> f err) config.cmds.authConfigureFailed |> Maybe.withDefault Cmd.none
+            , config.cmds.authConfigureFailed err
             )
 
         AnalyticsConfigured authIdentity ->
@@ -141,7 +141,7 @@ update config msg model =
 
         AnalyticsConfigureFailed err ->
             ( { model | analytics = RemoteData.Failure err }
-            , Maybe.map (\f -> f err) config.cmds.analyticsConfigureFailed |> Maybe.withDefault Cmd.none
+            , config.cmds.analyticsConfigureFailed err
             )
 
         AuthFetchedNewCredentials authIdentity ->
@@ -149,7 +149,7 @@ update config msg model =
 
         AuthFetchNewCredientalsFailed err ->
             ( model
-            , Maybe.map (\f -> f err) config.cmds.fetchNewCredentialsFailed |> Maybe.withDefault Cmd.none
+            , config.cmds.fetchNewCredentialsFailed err
             )
 
         Record event ->
@@ -166,7 +166,7 @@ update config msg model =
 
         RecordFailed err ->
             ( model
-            , Maybe.map (\f -> f err) config.cmds.recordFailed |> Maybe.withDefault Cmd.none
+            , config.cmds.recordFailed err
             )
 
 
