@@ -1,6 +1,6 @@
 module AWS.Amplify.Auth exposing
-    ( Identity
-    , Config, configure
+    ( Identity, Credentials
+    , Config, configure, getCredentials
     )
 
 {-| Configure authentication using Amazon Cognito.
@@ -8,21 +8,19 @@ module AWS.Amplify.Auth exposing
 
 # Identity
 
-@docs Identity
+@docs Identity, Credentials
 
 
 # Configure
 
-@docs Config, configure
+@docs Config, configure, getCredentials
 
 -}
 
 import AWS.CognitoIdentity as CognitoIdentity
 import AWS.Config
-import AWS.Credentials exposing (Credentials)
 import AWS.Http
 import Http
-import Maybe.Extra as MaybeExtra
 import Task exposing (Task)
 
 
@@ -35,6 +33,16 @@ import Task exposing (Task)
 type alias Identity =
     { identityId : String
     , credentials : Credentials
+    }
+
+
+{-| Credentials
+-}
+type alias Credentials =
+    { accessKeyId : String
+    , secretAccessKey : String
+    , expiration : String
+    , sessionToken : Maybe String
     }
 
 
@@ -69,31 +77,6 @@ configure { region, identityPoolId } =
                     |> Maybe.map (getCredentials region)
                     |> Maybe.withDefault (Task.fail (AWS.Http.HttpError (Http.BadBody "IdentityId is null")))
             )
-        |> Task.andThen
-            (\{ credentials, identityId } ->
-                MaybeExtra.andThen2
-                    (\id { accessKeyId, secretKey, sessionToken } ->
-                        Maybe.map2
-                            (\accessKeyId_ secretAccessKey_ ->
-                                let
-                                    credentials_ =
-                                        { accessKeyId = accessKeyId_
-                                        , secretAccessKey = secretAccessKey_
-                                        , sessionToken = sessionToken
-                                        }
-                                in
-                                Task.succeed
-                                    { identityId = id
-                                    , credentials = credentials_
-                                    }
-                            )
-                            accessKeyId
-                            secretKey
-                    )
-                    identityId
-                    credentials
-                    |> Maybe.withDefault (Task.fail (AWS.Http.HttpError (Http.BadBody "Missing identityId or credentials")))
-            )
 
 
 {-| Get identityId
@@ -111,7 +94,7 @@ getId region identityPoolId =
 
 {-| Get credentials for identityId
 -}
-getCredentials : AWS.Config.Region -> String -> Task (AWS.Http.Error AWS.Http.AWSAppError) CognitoIdentity.GetCredentialsForIdentityResponse
+getCredentials : AWS.Config.Region -> String -> Task (AWS.Http.Error AWS.Http.AWSAppError) Identity
 getCredentials region identityId =
     AWS.Http.sendUnsigned (CognitoIdentity.service region)
         (CognitoIdentity.getCredentialsForIdentity
@@ -120,3 +103,29 @@ getCredentials region identityId =
             , logins = Nothing
             }
         )
+        |> Task.andThen
+            (\{ credentials } ->
+                credentials
+                    |> Maybe.andThen
+                        (\{ accessKeyId, secretKey, sessionToken, expiration } ->
+                            Maybe.map3
+                                (\accessKeyId_ secretAccessKey_ expiration_ ->
+                                    let
+                                        credentials_ =
+                                            { accessKeyId = accessKeyId_
+                                            , secretAccessKey = secretAccessKey_
+                                            , sessionToken = sessionToken
+                                            , expiration = expiration_
+                                            }
+                                    in
+                                    Task.succeed
+                                        { identityId = identityId
+                                        , credentials = credentials_
+                                        }
+                                )
+                                accessKeyId
+                                secretKey
+                                expiration
+                        )
+                    |> Maybe.withDefault (Task.fail (AWS.Http.HttpError (Http.BadBody "Missing identityId or credentials")))
+            )

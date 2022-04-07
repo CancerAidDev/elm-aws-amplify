@@ -17,9 +17,9 @@ module AWS.Amplify.Analytics exposing
 
 -}
 
+import AWS.Amplify.Auth as Auth
 import AWS.Amplify.ClientInfo as ClientInfo exposing (ClientInfo)
 import AWS.Config
-import AWS.Credentials exposing (Credentials)
 import AWS.Http
 import AWS.Pinpoint as Pinpoint
 import Dict exposing (Dict)
@@ -35,7 +35,7 @@ import Time
 {-| Analytics config
 -}
 type alias Config =
-    { credentials : Credentials
+    { credentials : Auth.Credentials
     , clientInfo : ClientInfo
     , applicationId : String
     , sessionId : String
@@ -58,7 +58,10 @@ type alias Endpoint =
 configure : Config -> Endpoint -> Task (AWS.Http.Error AWS.Http.AWSAppError) Pinpoint.UpdateEndpointResponse
 configure { credentials, clientInfo, applicationId, identityId, region } { endpointId, requestId } =
     AWS.Http.send (Pinpoint.service region)
-        credentials
+        { accessKeyId = credentials.accessKeyId
+        , secretAccessKey = credentials.secretAccessKey
+        , sessionToken = credentials.sessionToken
+        }
         (Pinpoint.updateEndpoint
             { applicationId = applicationId
             , endpointId = endpointId
@@ -91,6 +94,7 @@ configure { credentials, clientInfo, applicationId, identityId, region } { endpo
 -}
 type alias Event =
     { eventId : String
+    , eventTime : Time.Posix
     , name : String
     , attributes : Dict String String
     }
@@ -99,14 +103,12 @@ type alias Event =
 {-| Record an event
 -}
 record : Config -> Event -> Task (AWS.Http.Error AWS.Http.AWSAppError) Pinpoint.PutEventsResponse
-record config event =
-    Time.now |> Task.andThen (recordWithTime config event)
-
-
-recordWithTime : Config -> Event -> Time.Posix -> Task (AWS.Http.Error AWS.Http.AWSAppError) Pinpoint.PutEventsResponse
-recordWithTime { credentials, clientInfo, applicationId, identityId, sessionId, sessionStartTime, region } { eventId, name, attributes } eventTime =
+record { credentials, clientInfo, applicationId, identityId, sessionId, sessionStartTime, region } { eventId, name, attributes, eventTime } =
     AWS.Http.send (Pinpoint.service region)
-        credentials
+        { accessKeyId = credentials.accessKeyId
+        , secretAccessKey = credentials.secretAccessKey
+        , sessionToken = credentials.sessionToken
+        }
         (Pinpoint.putEvents
             { applicationId = applicationId
             , eventsRequest =

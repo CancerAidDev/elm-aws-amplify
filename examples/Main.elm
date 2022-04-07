@@ -141,21 +141,25 @@ update msg model =
                     step Uuid.generator model.seed
             in
             ( { model | seed = seed1 }
-            , Task.attempt Recorded
-                (Analytics.record
-                    { credentials = identity.credentials
-                    , clientInfo = model.clientInfo
-                    , applicationId = model.applicationId
-                    , sessionId = model.sessionId
-                    , sessionStartTime = model.sessionStartTime
-                    , identityId = identity.identityId
-                    , region = model.region
-                    }
-                    { eventId = Uuid.toString eventId
-                    , name = model.name
-                    , attributes = Dict.fromList [ ( model.key, model.value ) ]
-                    }
-                )
+            , Time.now
+                |> Task.andThen
+                    (\time ->
+                        Analytics.record
+                            { credentials = identity.credentials
+                            , clientInfo = model.clientInfo
+                            , applicationId = model.applicationId
+                            , sessionId = model.sessionId
+                            , sessionStartTime = model.sessionStartTime
+                            , identityId = identity.identityId
+                            , region = model.region
+                            }
+                            { eventId = Uuid.toString eventId
+                            , name = model.name
+                            , attributes = Dict.fromList [ ( model.key, model.value ) ]
+                            , eventTime = time
+                            }
+                    )
+                |> Task.attempt Recorded
             )
 
         Recorded result ->
