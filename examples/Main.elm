@@ -8,8 +8,7 @@ import Html exposing (Html, button, div, h1, h2, h3, input, label, text)
 import Html.Attributes exposing (disabled, style, value)
 import Html.Events exposing (onClick, onInput)
 import Iso8601
-import Prng.Uuid as Uuid
-import Random.Pcg.Extended exposing (initialSeed, step)
+import Random.Pcg.Extended exposing (initialSeed)
 import RemoteData
 import Time
 import Time.Extra as TimeExtra
