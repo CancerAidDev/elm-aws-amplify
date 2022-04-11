@@ -1,7 +1,7 @@
 module AWS.Amplify exposing
     ( Config, Model, init
     , update, Msg
-    , record, Event
+    , record, recordWithHooks, Event, EventHooks
     )
 
 {-| Amplify component that handles refresh of expired cognito credentials.
@@ -19,7 +19,7 @@ module AWS.Amplify exposing
 
 # Record Events
 
-@docs record, Event
+@docs record, recordWithHooks, Event, EventHooks
 
 -}
 
@@ -50,10 +50,10 @@ type Msg
     | AuthFetchedNewCredentials Auth.Identity
     | AuthFetchNewCredientalsFailed (AWS.Http.Error AWS.Http.AWSAppError)
     | Record Event
-    | RecordWithTime Event Time.Posix
-    | RecordWithAuthAndTime Auth.Identity Analytics.Event Time.Posix
-    | Recorded
-    | RecordFailed (AWS.Http.Error AWS.Http.AWSAppError)
+    | RecordWithTime Event EventHooks Time.Posix
+    | RecordWithAuthAndTime Auth.Identity AmplifyEvent Time.Posix
+    | Recorded AmplifyEvent
+    | RecordFailed AmplifyEvent (AWS.Http.Error AWS.Http.AWSAppError)
 
 
 {-| Static configuration settings
@@ -83,7 +83,7 @@ type alias Model =
     , sessionStartTime : Time.Posix
     , authIdentity : RemoteData (AWS.Http.Error AWS.Http.AWSAppError) Auth.Identity
     , analytics : RemoteData (AWS.Http.Error AWS.Http.AWSAppError) ()
-    , queue : Dict String Analytics.Event
+    , queue : Dict String AmplifyEvent
     }
 
 
@@ -116,6 +116,23 @@ init { awsRegion, identityPoolId, time, seed } =
 type alias Event =
     { name : String
     , attributes : Dict String String
+    }
+
+
+type alias AmplifyEvent =
+    { eventId : String
+    , eventTime : Time.Posix
+    , name : String
+    , attributes : Dict String String
+    , hooks : EventHooks
+    }
+
+
+{-| EventHooks datatype
+-}
+type alias EventHooks =
+    { recorded : Cmd Msg
+    , recordFailed : AWS.Http.Error AWS.Http.AWSAppError -> Cmd Msg
     }
 
 
@@ -155,18 +172,21 @@ update config msg model =
         Record event ->
             ( model, record event )
 
-        RecordWithTime event time ->
-            recordWithTime config model event time
+        RecordWithTime event hooks time ->
+            recordWithTime config model event hooks time
 
         RecordWithAuthAndTime authIdentity event time ->
             recordWithAuthAndTime config model authIdentity event time
 
-        Recorded ->
-            ( model, Cmd.none )
+        Recorded event ->
+            ( model, event.hooks.recorded )
 
-        RecordFailed err ->
+        RecordFailed event err ->
             ( model
-            , config.cmds.recordFailed err
+            , Cmd.batch
+                [ config.cmds.recordFailed err
+                , event.hooks.recordFailed err
+                ]
             )
 
 
@@ -227,20 +247,37 @@ Events are stored in a queue if the identity, credentials, or analytics are load
 -}
 record : Event -> Cmd Msg
 record event =
-    Task.perform (RecordWithTime event) Time.now
+    Task.perform
+        (RecordWithTime event
+            { recorded = Cmd.none
+            , recordFailed = always Cmd.none
+            }
+        )
+        Time.now
 
 
-recordWithTime : Config -> Model -> Event -> Time.Posix -> ( Model, Cmd Msg )
-recordWithTime config model event time =
+{-| Record event with hooks.
+
+Used for running a command when a record request has finished successfully or failed.
+
+-}
+recordWithHooks : Event -> EventHooks -> Cmd Msg
+recordWithHooks event hooks =
+    Task.perform (RecordWithTime event hooks) Time.now
+
+
+recordWithTime : Config -> Model -> Event -> EventHooks -> Time.Posix -> ( Model, Cmd Msg )
+recordWithTime config model event hooks time =
     let
         ( eventId, seed1 ) =
             Seed.step Uuid.generator model.seed
 
-        analyticsEvent =
+        amplifyEvent =
             { eventId = Uuid.toString eventId
             , eventTime = time
             , name = event.name
             , attributes = event.attributes
+            , hooks = hooks
             }
 
         updatedModel =
@@ -249,13 +286,13 @@ recordWithTime config model event time =
     case model.authIdentity of
         RemoteData.Success authIdentity ->
             if RemoteData.isSuccess model.analytics then
-                recordWithAuthAndTime config updatedModel authIdentity analyticsEvent time
+                recordWithAuthAndTime config updatedModel authIdentity amplifyEvent time
 
             else
-                ( recordEnqueue updatedModel analyticsEvent, Cmd.none )
+                ( recordEnqueue updatedModel amplifyEvent, Cmd.none )
 
         RemoteData.Loading ->
-            ( recordEnqueue updatedModel analyticsEvent, Cmd.none )
+            ( recordEnqueue updatedModel amplifyEvent, Cmd.none )
 
         RemoteData.Failure _ ->
             ( model, Cmd.none )
@@ -264,17 +301,17 @@ recordWithTime config model event time =
             ( model, Cmd.none )
 
 
-recordEnqueue : Model -> Analytics.Event -> Model
+recordEnqueue : Model -> AmplifyEvent -> Model
 recordEnqueue model event =
     { model | queue = Dict.insert event.eventId event model.queue }
 
 
-recordWithAuth : Auth.Identity -> Analytics.Event -> Cmd Msg
+recordWithAuth : Auth.Identity -> AmplifyEvent -> Cmd Msg
 recordWithAuth authIdentity event =
     Task.perform (RecordWithAuthAndTime authIdentity event) Time.now
 
 
-recordWithAuthAndTime : Config -> Model -> Auth.Identity -> Analytics.Event -> Time.Posix -> ( Model, Cmd Msg )
+recordWithAuthAndTime : Config -> Model -> Auth.Identity -> AmplifyEvent -> Time.Posix -> ( Model, Cmd Msg )
 recordWithAuthAndTime config model authIdentity event time =
     if isValid authIdentity time then
         ( { model | queue = Dict.remove event.eventId model.queue }
@@ -287,8 +324,15 @@ recordWithAuthAndTime config model authIdentity event time =
             , identityId = authIdentity.identityId
             , region = config.awsRegion
             }
-            event
-            |> Task.attempt (Result.map (always Recorded) >> ResultExtra.extract RecordFailed)
+            { eventId = event.eventId
+            , eventTime = event.eventTime
+            , name = event.name
+            , attributes = event.attributes
+            }
+            |> Task.attempt
+                (Result.map (always (Recorded event))
+                    >> ResultExtra.extract (RecordFailed event)
+                )
         )
 
     else
