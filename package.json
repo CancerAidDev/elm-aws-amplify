@@ -7,13 +7,13 @@
   "scripts": {
     "start": "yarn parcel examples/index.html --no-cache",
     "build": "yarn elm make",
-    "build:example": "yarn parcel build --no-optimize examples/index.html"
+    "build:example": "yarn parcel build --no-optimize examples/index.html",
+    "postinstall": "elm-tooling install"
   },
   "devDependencies": {
-    "@parcel/transformer-elm": "2.4.0",
-    "elm": "^0.19.1-5",
-    "elm-format": "^0.8.5",
-    "elm-review": "^2.7.1",
-    "parcel": "^2.4.0"
+    "@parcel/transformer-elm": "^2.8.3",
+    "elm-review": "^2.10.1",
+    "elm-tooling": "^1.14.0",
+    "parcel": "^2.8.3"
   }
 }
