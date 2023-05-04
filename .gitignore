@@ -32,4 +32,4 @@ repl-temp-*
 
 .parcel-cache
 dist
-node_Modules
+node_modules
