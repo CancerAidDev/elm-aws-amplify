@@ -15,5 +15,8 @@
     "elm-review": "^2.10.1",
     "elm-tooling": "^1.14.0",
     "parcel": "^2.8.3"
+  },
+  "resolutions": {
+    "cross-spawn": "^7.0.6"
   }
 }
